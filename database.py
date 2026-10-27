@@ -9,11 +9,12 @@ ORIGINAL_DB_PATH = os.path.join(BASE_DIR, "data", "marble_erp.db")
 if IS_VERCEL:
     os.makedirs("/tmp/data", exist_ok=True)
     DB_PATH = "/tmp/data/marble_erp.db"
-    if not os.path.exists(DB_PATH) and os.path.exists(ORIGINAL_DB_PATH):
-        try:
-            shutil.copy2(ORIGINAL_DB_PATH, DB_PATH)
-        except Exception as e:
-            print(f"Error copying DB to /tmp: {e}")
+    if os.path.exists(ORIGINAL_DB_PATH):
+        if not os.path.exists(DB_PATH) or os.path.getmtime(ORIGINAL_DB_PATH) > os.path.getmtime(DB_PATH):
+            try:
+                shutil.copy2(ORIGINAL_DB_PATH, DB_PATH)
+            except Exception as e:
+                print(f"Error copying DB to /tmp: {e}")
 else:
     DB_PATH = ORIGINAL_DB_PATH
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)

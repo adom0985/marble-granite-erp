@@ -4,7 +4,7 @@ import re
 import urllib.parse
 from typing import List, Optional
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -15,6 +15,13 @@ from database import get_connection, init_db
 from excel_exporter import create_invoice_excel
 
 app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="6.0")
+
+@app.middleware("http")
+async def api_prefix_middleware(request: Request, call_next):
+    p = request.scope.get("path", "")
+    if p != "/" and not p.startswith("/static") and not p.startswith("/uploads") and not p.startswith("/api/"):
+        request.scope["path"] = "/api" + p
+    return await call_next(request)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
