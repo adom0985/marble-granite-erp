@@ -55,7 +55,8 @@ async def security_and_routing_middleware(request: Request, call_next):
                 "auth_required": True,
                 "debug_p": p,
                 "debug_url": request.url.path,
-                "debug_matched": matched
+                "debug_query": str(request.query_params),
+                "debug_headers": dict(request.headers)
             }
         )
 
