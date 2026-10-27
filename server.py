@@ -50,7 +50,13 @@ async def security_and_routing_middleware(request: Request, call_next):
     if not user_payload:
         return JSONResponse(
             status_code=401,
-            content={"detail": "غير مصرح - يرجى تسجيل الدخول أولاً", "auth_required": True}
+            content={
+                "detail": "غير مصرح - يرجى تسجيل الدخول أولاً",
+                "auth_required": True,
+                "debug_p": p,
+                "debug_url": request.url.path,
+                "debug_matched": matched
+            }
         )
 
     request.state.user = user_payload
