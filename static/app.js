@@ -49,9 +49,6 @@ function initTabs() {
             if (targetId === "dashboard-pane") loadDashboardStats();
             if (targetId === "archive-pane") loadInvoicesArchive();
             if (targetId === "clients-pane") loadClientsList();
-            if (targetId === "prices-pane") renderPricesTab();
-            if (targetId === "partners-pane") loadPartnersSummary();
-            if (targetId === "factories-pane") loadFactories();
             if (targetId === "repository-pane") loadRepository();
         });
     });
@@ -548,10 +545,12 @@ async function loadDashboardStats() {
         const res = await fetch("/api/dashboard/stats");
         const data = await res.json();
 
-        document.getElementById("stat-sales").innerText = Number(data.total_sales).toLocaleString() + " ج.م";
-        document.getElementById("stat-pieces").innerText = Number(data.total_pieces).toLocaleString() + " طاولات وترابيع";
-        document.getElementById("stat-area").innerText = Number(data.total_area).toLocaleString() + " م٢";
-        document.getElementById("stat-disk-files").innerText = `${data.disk_files_count || 0} ملف في المستودع`;
+        if (document.getElementById("stat-sales")) document.getElementById("stat-sales").innerText = Number(data.total_sales).toLocaleString() + " ج.م";
+        if (document.getElementById("stat-receivables")) document.getElementById("stat-receivables").innerText = Number(data.total_receivables || 0).toLocaleString() + " ج.م";
+        if (document.getElementById("stat-paid")) document.getElementById("stat-paid").innerText = Number(data.total_paid || 0).toLocaleString() + " ج.م";
+        if (document.getElementById("stat-pieces")) document.getElementById("stat-pieces").innerText = Number(data.total_pieces).toLocaleString() + " قطعة";
+        if (document.getElementById("stat-area")) document.getElementById("stat-area").innerText = Number(data.total_area).toLocaleString() + " م٢";
+        if (document.getElementById("stat-disk-files")) document.getElementById("stat-disk-files").innerText = `${data.disk_files_count || 0} ملف في المستودع`;
 
         const topTbody = document.getElementById("top-materials-tbody");
         topTbody.innerHTML = "";
@@ -591,29 +590,62 @@ async function loadDashboardStats() {
 
 // ----------------- INVOICES ARCHIVE -----------------
 
+let currentArchiveFilterClient = "";
+
+function filterArchiveByClient(clientName) {
+    currentArchiveFilterClient = clientName;
+    const searchInput = document.getElementById("archive-search");
+    if (searchInput) searchInput.value = "";
+    loadInvoicesArchive();
+}
+
 async function loadInvoicesArchive() {
     const searchVal = document.getElementById("archive-search") ? document.getElementById("archive-search").value : "";
+    let url = `/api/invoices?search=${encodeURIComponent(searchVal)}`;
+    if (currentArchiveFilterClient) {
+        url += `&client=${encodeURIComponent(currentArchiveFilterClient)}`;
+    }
     try {
-        const res = await fetch(`/api/invoices?search=${encodeURIComponent(searchVal)}`);
+        const res = await fetch(url);
         const list = await res.json();
         const tbody = document.getElementById("archive-tbody");
         tbody.innerHTML = "";
 
+        if (!list || list.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:25px; color:#64748b; font-weight:700; font-size:1rem;">لا توجد فواتير مطابقة لهذا البحث أو الفلتر.</td></tr>`;
+            return;
+        }
+
+        const token = localStorage.getItem("erp_token") || "";
+        const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+
         list.forEach(inv => {
             const tr = document.createElement("tr");
+
+            // Client badge colors
+            let clientBadge = `<span class="badge badge-blue">${inv.client_name}</span>`;
+            if (inv.client_name === "الحاج صلاح") {
+                clientBadge = `<span class="badge" style="background:#fef08a; color:#854d0e; font-weight:800; border:1px solid #eab308;">👑 الحاج صلاح</span>`;
+            } else if (inv.client_name === "أحمد رضا") {
+                clientBadge = `<span class="badge" style="background:#ccfbf1; color:#0f766e; font-weight:800; border:1px solid #14b8a6;">📄 أحمد رضا</span>`;
+            } else if (inv.client_name === "أدهم") {
+                clientBadge = `<span class="badge" style="background:#f3e8ff; color:#6b21a8; font-weight:800; border:1px solid #a855f7;">💼 أدهم</span>`;
+            } else if (inv.client_name === "صديق جعفر") {
+                clientBadge = `<span class="badge" style="background:#ffedd5; color:#9a3412; font-weight:800; border:1px solid #f97316;">🤝 صديق جعفر</span>`;
+            }
+
             tr.innerHTML = `
-                <td><b>${inv.invoice_no}</b></td>
-                <td>${inv.invoice_date}</td>
-                <td><b>${inv.client_name}</b></td>
-                <td>${inv.driver_name || '-'} / ${inv.car_no || '-'}</td>
-                <td>${inv.total_pieces}</td>
-                <td>${inv.total_area} م٢</td>
-                <td><b>${Number(inv.total_amount).toLocaleString()} ج.م</b></td>
+                <td><b style="font-size:0.95rem; color:#1e3a8a;">${inv.invoice_no}</b></td>
+                <td><span style="font-weight:700; color:#475569;">${inv.invoice_date}</span></td>
+                <td>${clientBadge}</td>
+                <td>${inv.driver_name || '-'} ${inv.car_no ? '/ ' + inv.car_no : ''}</td>
+                <td><b>${inv.total_pieces}</b> ق (${Number(inv.total_area).toLocaleString()} م٢)</td>
+                <td><b style="color:#1e3a8a; font-size:1.05rem;">${Number(inv.net_amount || inv.total_amount).toLocaleString()} ج.م</b></td>
                 <td>
-                    <div style="display:flex; gap:0.3rem;">
-                        <button class="btn btn-outline" style="padding:4px 8px; font-size:0.8rem;" onclick="viewInvoiceDetail(${inv.id})">✏️ تعديل / عرض</button>
-                        <a href="/api/invoices/${inv.id}/export-excel" class="btn btn-success" style="padding:4px 8px; font-size:0.8rem;">📥 إكسيل</a>
-                        <a href="/api/invoices/${inv.id}/export-pdf" target="_blank" class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem; background:#dc2626; border-color:#dc2626;">📄 PDF</a>
+                    <div style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                        <a href="/api/invoices/${inv.id}/export-pdf${tokenParam}" target="_blank" class="btn btn-danger" style="padding:4px 9px; font-size:0.8rem; background:#dc2626; border-color:#dc2626; font-weight:800;" title="تحميل أو معاينة الفاتورة بصيغة PDF المنسقة الرسمية">📄 PDF</a>
+                        <a href="/api/invoices/${inv.id}/export-excel${tokenParam}" class="btn btn-success" style="padding:4px 9px; font-size:0.8rem; font-weight:700;">📥 إكسيل</a>
+                        <button class="btn btn-outline" style="padding:4px 9px; font-size:0.8rem; font-weight:700;" onclick="viewInvoiceDetail(${inv.id})">✏️ تعديل</button>
                         <button class="btn btn-primary" style="padding:4px 8px; font-size:0.8rem; background:#25d366; border-color:#25d366;" onclick="directShareWhatsApp(${inv.id})">💬 واتساب</button>
                         <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteInvoiceItem(${inv.id})">✕</button>
                     </div>
@@ -1396,8 +1428,6 @@ function unlockApp(username = "admin") {
         loadClients();
         setupInitialInvoiceRows();
         loadInvoicesArchive();
-        loadPartnersSummary();
-        loadFactories();
         loadRepository();
     }
 }

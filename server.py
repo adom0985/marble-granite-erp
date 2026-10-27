@@ -392,10 +392,15 @@ def get_dashboard_stats():
     conn = get_connection()
     c = conn.cursor()
 
-    c.execute("SELECT COUNT(*), COALESCE(SUM(total_amount), 0), COALESCE(SUM(total_pieces), 0), COALESCE(SUM(total_area), 0) FROM invoices")
+    c.execute("SELECT COUNT(*), COALESCE(SUM(net_amount), 0), COALESCE(SUM(total_pieces), 0), COALESCE(SUM(total_area), 0) FROM invoices WHERE status != 'متقفلة (أرشيف قديم)'")
     inv_count, total_sales, total_pieces, total_area = c.fetchone()
 
-    # Get total repository files count
+    # Total paid and receivables
+    c.execute("SELECT COALESCE(SUM(amount_egp), 0) FROM client_payments")
+    total_paid = c.fetchone()[0]
+    total_receivables = round(total_sales - total_paid, 2)
+
+    # Count clients
     c.execute("SELECT COUNT(*) FROM clients")
     clients_count = c.fetchone()[0]
 
@@ -406,21 +411,25 @@ def get_dashboard_stats():
             disk_files_count += sum(1 for f in files if not f.startswith("~$"))
 
     c.execute("""
-    SELECT material_name, SUM(qty) as total_qty, ROUND(SUM(area), 2) as total_m2, ROUND(SUM(total), 2) as total_revenue
-    FROM invoice_items
-    GROUP BY material_name
+    SELECT ii.material_name, SUM(ii.qty) as total_qty, ROUND(SUM(ii.area), 2) as total_m2, ROUND(SUM(ii.total), 2) as total_revenue
+    FROM invoice_items ii
+    JOIN invoices inv ON ii.invoice_id = inv.id
+    WHERE inv.status != 'متقفلة (أرشيف قديم)'
+    GROUP BY ii.material_name
     ORDER BY total_revenue DESC
     LIMIT 6
     """)
     top_materials = [dict(row) for row in c.fetchall()]
 
-    c.execute("SELECT * FROM invoices ORDER BY invoice_date DESC, id DESC LIMIT 5")
+    c.execute("SELECT * FROM invoices WHERE status != 'متقفلة (أرشيف قديم)' ORDER BY id DESC LIMIT 8")
     recent_invoices = [dict(row) for row in c.fetchall()]
 
     conn.close()
     return {
         "inv_count": inv_count,
         "total_sales": round(total_sales, 2),
+        "total_paid": round(total_paid, 2),
+        "total_receivables": total_receivables,
         "total_pieces": int(total_pieces),
         "total_area": round(total_area, 2),
         "clients_count": clients_count,
@@ -442,7 +451,7 @@ def get_invoices(client: Optional[str] = None, search: Optional[str] = None):
         query += " AND (invoice_no LIKE ? OR client_name LIKE ? OR driver_name LIKE ?)"
         wild = f"%{search}%"
         params.extend([wild, wild, wild])
-    query += " ORDER BY invoice_date DESC, id DESC"
+    query += " ORDER BY id DESC"
     c.execute(query, params)
     invoices = [dict(row) for row in c.fetchall()]
     conn.close()

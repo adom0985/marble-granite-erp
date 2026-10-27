@@ -109,15 +109,7 @@
                 <button class="nav-tab-btn" data-tab="repository-pane">
                     <i class="fa-solid fa-boxes-stacked"></i> مستودع الملفات والشغل
                 </button>
-                <button class="nav-tab-btn" data-tab="prices-pane">
-                    <i class="fa-solid fa-tags"></i> مركز تعديل الأسعار
-                </button>
-                <button class="nav-tab-btn" data-tab="partners-pane">
-                    <i class="fa-solid fa-handshake"></i> حساب أحمد وحسين
-                </button>
-                <button class="nav-tab-btn" data-tab="factories-pane">
-                    <i class="fa-solid fa-industry"></i> مصانع النشر والتلميع
-                </button>
+
             </nav>
             <div style="display:flex; align-items:center; gap:0.75rem; margin-right:auto;">
                 <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; padding:5px 12px; border-radius:12px; font-size:0.82rem;">
@@ -210,7 +202,7 @@
                             <i class="fa-solid fa-crown" style="color:#fde047;"></i>
                         </div>
                         <h4 style="margin:10px 0 4px 0; font-size:1.2rem; font-weight:900;">ملف الحاج صلاح</h4>
-                        <p style="font-size:0.82rem; opacity:0.9; margin-bottom:12px;">38 فاتورة مسجلة بجميع المسميات وسجل واصل والدينار</p>
+                        <p style="font-size:0.82rem; opacity:0.9; margin-bottom:12px;">7 فواتير نشطة معتمدة وسجل واصل والمتبقي</p>
                         <div style="display:flex; flex-direction:column; gap:6px;">
                             <div style="display:flex; gap:6px;">
                                 <button class="btn btn-warning" style="flex:1; padding:6px; font-size:0.82rem; font-weight:800;" onclick="showClientStatement('الحاج صلاح')">👁️ فتح الحساب</button>
@@ -491,6 +483,15 @@
                         <button class="btn btn-primary" onclick="loadInvoicesArchive()"><i class="fa-solid fa-magnifying-glass"></i> بحث</button>
                     </div>
                 </div>
+                
+                <!-- Quick Filter Buttons (Newest first, single click) -->
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; padding:0.5rem 0; border-bottom:1px solid #e2e8f0;">
+                    <button class="btn btn-outline" style="padding:5px 14px; font-size:0.85rem; font-weight:800;" onclick="filterArchiveByClient('')">🌟 جميع الفواتير</button>
+                    <button class="btn btn-outline" style="padding:5px 14px; font-size:0.85rem; font-weight:800; background:#fef08a; color:#854d0e; border-color:#eab308;" onclick="filterArchiveByClient('الحاج صلاح')">👑 الحاج صلاح</button>
+                    <button class="btn btn-outline" style="padding:5px 14px; font-size:0.85rem; font-weight:800; background:#ccfbf1; color:#0f766e; border-color:#14b8a6;" onclick="filterArchiveByClient('أحمد رضا')">📄 أحمد رضا</button>
+                    <button class="btn btn-outline" style="padding:5px 14px; font-size:0.85rem; font-weight:800; background:#f3e8ff; color:#6b21a8; border-color:#a855f7;" onclick="filterArchiveByClient('أدهم')">💼 ملف أدهم</button>
+                    <button class="btn btn-outline" style="padding:5px 14px; font-size:0.85rem; font-weight:800; background:#ffedd5; color:#9a3412; border-color:#f97316;" onclick="filterArchiveByClient('صديق جعفر')">🤝 صديق جعفر</button>
+                </div>
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -533,7 +534,7 @@
                             <i class="fa-solid fa-crown" style="color:#fde047; font-size:1.2rem;"></i>
                         </div>
                         <h3 style="margin:8px 0 4px 0; font-size:1.25rem;">ملف الحاج صلاح الشامل</h3>
-                        <p style="font-size:0.85rem; opacity:0.9; margin-bottom:12px;">38 فاتورة مسجلة بجميع المسميات الأصلية والدفعات</p>
+                        <p style="font-size:0.85rem; opacity:0.9; margin-bottom:12px;">7 فواتير نشطة معتمدة وسجل الدفعات والمتبقي</p>
                         <div style="display:flex; gap:6px;">
                             <button class="btn btn-warning" style="flex:1; padding:6px; font-size:0.85rem; font-weight:700;" onclick="showClientStatement('الحاج صلاح')">👁️ عرض السجل</button>
                             <a href="/api/special-files/الحاج صلاح/download" class="btn btn-outline" style="background:#fff; color:#1e3a8a; padding:6px 10px; font-size:0.85rem; font-weight:700;">📥 إكسيل مطور</a>
