@@ -11,6 +11,21 @@ if current_dir not in sys.path:
 
 try:
     from server import app
+    from fastapi import Request
+
+    @app.get("/api/index.py")
+    def test_vercel_index_py(request: Request):
+        return {
+            "matched_index_py": True,
+            "path": request.url.path,
+            "query": str(request.url.query),
+            "headers": dict(request.headers)
+        }
+
+    @app.get("/api/ping")
+    def test_ping():
+        return {"status": "pong"}
+
 except Exception as e:
     import traceback
     from fastapi import FastAPI
