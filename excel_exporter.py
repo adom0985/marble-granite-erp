@@ -150,19 +150,20 @@ def create_invoice_excel(invoice_data, output_path):
         cell.alignment = align_center
         cell.border = cell_border
 
-    # Aggregate items by material + width
+    # Aggregate items strictly by material (no length or width split)
     agg = {}
     for it in items:
-        mat = it.get("material_name", "")
-        wid = it.get("width", 0)
+        mat = (it.get("material_name") or "خامة").strip()
         is_free = bool(it.get("is_free", False))
-        price = 0 if is_free else it.get("price", 0)
-        suffix = " ( فري )" if is_free else (f" ( {wid} )" if wid > 0 else "")
+        price = 0 if is_free else float(it.get("price") or 0)
+        suffix = " ( فري )" if is_free else ""
         key = f"{mat}{suffix}"
         if key not in agg:
-            agg[key] = {"qty": 0, "area": 0, "price": price}
-        agg[key]["qty"] += float(it.get("qty", 0))
-        agg[key]["area"] += float(it.get("area", 0))
+            agg[key] = {"qty": 0.0, "area": 0.0, "price": price}
+        agg[key]["qty"] += float(it.get("qty") or 0)
+        agg[key]["area"] += float(it.get("area") or 0)
+        if not is_free and price > 0:
+            agg[key]["price"] = price
 
     s_row = sum_hdr_row + 1
     for key, val in agg.items():

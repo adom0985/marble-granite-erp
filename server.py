@@ -813,7 +813,7 @@ def get_whatsapp_link(invoice_id: int, phone: Optional[str] = None):
         clean_phone = "20" + clean_phone[1:]
 
     msg = (
-        f"🏛️ *شركة خالي أحمد جلال للرخام والجرانيت*\n"
+        f"📄 *فاتورة توريد رخام وجرانيت*\n"
         f"السلام عليكم يا حاج {inv['client_name']}\n"
         f"مرفق تفاصيل الفاتورة رقم: *{inv['invoice_no']}*\n"
         f"📅 *التاريخ:* {inv['invoice_date']}\n"
