@@ -1,3 +1,14 @@
+// Smart API routing for Vercel vs Local
+if (typeof window !== "undefined" && window.location && window.location.hostname.includes("vercel.app")) {
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+        if (typeof url === "string" && url.startsWith("/api/")) {
+            url = url.substring(4);
+        }
+        return originalFetch(url, options);
+    };
+}
+
 // Global state
 let materialsList = [];
 let clientsList = [];
