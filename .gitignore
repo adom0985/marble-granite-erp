@@ -7,3 +7,4 @@ env/
 venv/
 .DS_Store
 exports/test*.xlsx
+cloudflared.exe
