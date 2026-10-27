@@ -5,11 +5,7 @@
         options = options || {};
         options.headers = options.headers || {};
 
-        if (typeof window !== "undefined" && window.location && window.location.hostname.includes("vercel.app")) {
-            if (typeof url === "string" && url.startsWith("/api/")) {
-                url = url.substring(4);
-            }
-        }
+
 
         const token = localStorage.getItem("erp_token");
         if (token) {
