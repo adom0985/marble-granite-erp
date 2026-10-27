@@ -6,11 +6,12 @@ IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ORIGINAL_DB_PATH = os.path.join(BASE_DIR, "data", "marble_erp.db")
 
+DB_VERSION = "2026_10_28_v4"
 if IS_VERCEL:
     os.makedirs("/tmp/data", exist_ok=True)
-    DB_PATH = "/tmp/data/marble_erp.db"
+    DB_PATH = f"/tmp/data/marble_erp_{DB_VERSION}.db"
     if os.path.exists(ORIGINAL_DB_PATH):
-        if not os.path.exists(DB_PATH) or os.path.getmtime(ORIGINAL_DB_PATH) > os.path.getmtime(DB_PATH) or os.path.getsize(ORIGINAL_DB_PATH) != os.path.getsize(DB_PATH):
+        if not os.path.exists(DB_PATH):
             try:
                 shutil.copy2(ORIGINAL_DB_PATH, DB_PATH)
             except Exception as e:

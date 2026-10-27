@@ -433,7 +433,7 @@ def get_dashboard_stats():
 def get_invoices(client: Optional[str] = None, search: Optional[str] = None):
     conn = get_connection()
     c = conn.cursor()
-    query = "SELECT * FROM invoices WHERE 1=1"
+    query = "SELECT * FROM invoices WHERE status != 'متقفلة (أرشيف قديم)'"
     params = []
     if client:
         query += " AND client_name = ?"
@@ -965,7 +965,7 @@ def get_client_statement(client_name: str):
     cl = c.fetchone()
 
     # Get invoices for this client independently
-    c.execute("SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, paid_amount, remaining_amount, notes, status FROM invoices WHERE client_name = ? ORDER BY id ASC", (client_name,))
+    c.execute("SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, paid_amount, remaining_amount, notes, status FROM invoices WHERE client_name = ? AND status != 'متقفلة (أرشيف قديم)' ORDER BY id ASC", (client_name,))
     invoices = [dict(r) for r in c.fetchall()]
 
     # Separate active invoices from closed/archived invoices
