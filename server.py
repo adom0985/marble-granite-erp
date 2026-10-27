@@ -19,45 +19,37 @@ app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفا�
 
 @app.middleware("http")
 async def security_and_routing_middleware(request: Request, call_next):
-    # If Vercel rewrote the request, restore original path
-    matched = request.headers.get("x-matched-path") or request.headers.get("x-vercel-matched-path")
-    if matched and not matched.endswith("index.py") and not matched.endswith("index"):
-        request.scope["path"] = matched
+    # 1. Restore subpath from Vercel rewrite parameter if present
+    subpath = request.query_params.get("path")
+    if subpath:
+        request.scope["path"] = "/api/" + subpath.lstrip("/")
 
     p = request.scope.get("path", "")
     
-    # 1. API rewrite if needed
+    # 2. Normalize API prefix if needed
     if p != "/" and not p.startswith("/static") and not p.startswith("/uploads") and not p.startswith("/api/"):
         p = "/api" + p
         request.scope["path"] = p
 
-    # 2. Public paths that do NOT require authentication
+    # 3. Public paths whitelist (Home, login, favicon, static files)
     is_public = (
         p in ("/", "/index.html", "/index", "/favicon.ico") or
         "auth/login" in p or
+        (subpath and "auth/login" in subpath) or
         request.url.path in ("/", "/index.html", "/index", "/favicon.ico") or
-        "auth/login" in request.url.path or
-        (matched and "auth/login" in matched) or
         p.startswith("/static/") or
         p.startswith("/uploads/")
     )
     if is_public:
         return await call_next(request)
 
-    # 3. Security guard: check token for EVERY other endpoint
+    # 4. Strict security guard: check token for EVERY other endpoint
     token = extract_token_from_request(request)
     user_payload = verify_auth_token(token)
     if not user_payload:
         return JSONResponse(
             status_code=401,
-            content={
-                "detail": "غير مصرح - يرجى تسجيل الدخول أولاً",
-                "auth_required": True,
-                "debug_p": p,
-                "debug_url": request.url.path,
-                "debug_query": str(request.query_params),
-                "debug_headers": dict(request.headers)
-            }
+            content={"detail": "غير مصرح - يرجى تسجيل الدخول أولاً", "auth_required": True}
         )
 
     request.state.user = user_payload
