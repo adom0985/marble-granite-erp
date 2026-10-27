@@ -502,6 +502,13 @@ def create_invoice(data: InvoiceCreateModel):
     }
     saved_path = save_invoice_to_client_folder(full_inv_dict)
 
+    # AUTO-SYNC CLIENT MASTER STATEMENT EXCEL ON DISK AND BUNDLED FILES
+    try:
+        from client_statement_sync import sync_client_statement_excel
+        sync_client_statement_excel(data.client_name)
+    except Exception as e:
+        print(f"Error syncing client excel statement: {e}")
+
     return {
         "status": "success", 
         "invoice_id": inv_id, 
@@ -615,6 +622,13 @@ def update_invoice(invoice_id: int, data: InvoiceCreateModel):
     }
     saved_path = save_invoice_to_client_folder(full_inv_dict)
 
+    # AUTO-SYNC CLIENT MASTER STATEMENT EXCEL ON DISK AND BUNDLED FILES
+    try:
+        from client_statement_sync import sync_client_statement_excel
+        sync_client_statement_excel(data.client_name)
+    except Exception as e:
+        print(f"Error syncing client excel statement: {e}")
+
     return {
         "status": "success", 
         "invoice_id": invoice_id, 
@@ -627,12 +641,24 @@ def update_invoice(invoice_id: int, data: InvoiceCreateModel):
 def delete_invoice(invoice_id: int):
     conn = get_connection()
     c = conn.cursor()
+    c.execute("SELECT client_name FROM invoices WHERE id = ?", (invoice_id,))
+    inv = c.fetchone()
+    client_name = inv["client_name"] if inv else None
+
     c.execute("DELETE FROM invoice_items WHERE invoice_id = ?", (invoice_id,))
     c.execute("DELETE FROM client_payments WHERE invoice_id = ?", (invoice_id,))
     c.execute("DELETE FROM invoice_attachments WHERE invoice_id = ?", (invoice_id,))
     c.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
     conn.commit()
     conn.close()
+
+    if client_name:
+        try:
+            from client_statement_sync import sync_client_statement_excel
+            sync_client_statement_excel(client_name)
+        except Exception as e:
+            print(f"Error syncing client excel statement on delete: {e}")
+
     return {"status": "success", "message": "تم حذف الفاتورة بنجاح"}
 
 @app.get("/api/invoices/{invoice_id}/export-excel")
@@ -829,6 +855,7 @@ def create_client(client: ClientCreateModel):
     return {"status": "success", "message": "تمت إضافة العميل بنجاح"}
 
 @app.get("/api/clients/{client_name}/statement")
+@app.get("/clients/{client_name}/statement")
 def get_client_statement(client_name: str):
     conn = get_connection()
     c = conn.cursor()
@@ -837,19 +864,33 @@ def get_client_statement(client_name: str):
     cl = c.fetchone()
 
     # Get invoices for this client independently
-    c.execute("SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, paid_amount, remaining_amount, notes FROM invoices WHERE client_name = ? ORDER BY invoice_date DESC", (client_name,))
+    c.execute("SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, paid_amount, remaining_amount, notes, status FROM invoices WHERE client_name = ? ORDER BY id ASC", (client_name,))
     invoices = [dict(r) for r in c.fetchall()]
 
+    # Separate active invoices from closed/archived invoices
+    active_invoices = [inv for inv in invoices if "متقفلة" not in (inv.get("status") or "")]
+    archived_invoices = [inv for inv in invoices if "متقفلة" in (inv.get("status") or "")]
+
     # Get payments for this client independently
-    c.execute("SELECT id, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes FROM client_payments WHERE client_name = ? ORDER BY payment_date DESC", (client_name,))
+    c.execute("SELECT id, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes FROM client_payments WHERE client_name = ? ORDER BY id ASC", (client_name,))
     payments = [dict(r) for r in c.fetchall()]
 
     conn.close()
+
+    total_active_invoices = sum(inv["net_amount"] for inv in active_invoices)
+    total_payments = sum(p["amount_egp"] for p in payments)
+    net_remaining = round(total_active_invoices - total_payments, 2)
+
     return {
         "client_name": client_name,
         "phone": cl["phone"] if cl else "",
         "notes": cl["notes"] if cl else "",
+        "total_active_invoices": total_active_invoices,
+        "total_payments": total_payments,
+        "net_remaining": net_remaining,
         "invoices": invoices,
+        "active_invoices": active_invoices,
+        "archived_invoices": archived_invoices,
         "payments": payments
     }
 
@@ -874,6 +915,7 @@ def download_special_file(client_name: str):
     raise HTTPException(status_code=404, detail="الملف غير موجود")
 
 @app.post("/api/payments")
+@app.post("/payments")
 def add_payment(p: PaymentCreateModel):
     conn = get_connection()
     c = conn.cursor()
@@ -884,6 +926,14 @@ def add_payment(p: PaymentCreateModel):
     """, (p.client_name, p.invoice_id, p.payment_date, p.amount, p.currency, p.exchange_rate, amount_egp, p.payment_method, p.notes))
     conn.commit()
     conn.close()
+
+    # AUTO-SYNC CLIENT MASTER STATEMENT EXCEL ON DISK AND BUNDLED FILES
+    try:
+        from client_statement_sync import sync_client_statement_excel
+        sync_client_statement_excel(p.client_name)
+    except Exception as e:
+        print(f"Error syncing client excel statement on payment: {e}")
+
     return {"status": "success", "amount_egp": amount_egp}
 
 # ----------------- MATERIALS & PRICE MANAGEMENT -----------------
