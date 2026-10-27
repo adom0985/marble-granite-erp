@@ -19,6 +19,11 @@ app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفا�
 
 @app.middleware("http")
 async def security_and_routing_middleware(request: Request, call_next):
+    # If Vercel rewrote the request, restore original path
+    matched = request.headers.get("x-matched-path") or request.headers.get("x-vercel-matched-path")
+    if matched and not matched.endswith("index.py") and not matched.endswith("index"):
+        request.scope["path"] = matched
+
     p = request.scope.get("path", "")
     
     # 1. API rewrite if needed
@@ -27,8 +32,16 @@ async def security_and_routing_middleware(request: Request, call_next):
         request.scope["path"] = p
 
     # 2. Public paths that do NOT require authentication
-    public_exact = ["/", "/api/auth/login", "/auth/login", "/favicon.ico"]
-    if p in public_exact or p.startswith("/static/"):
+    is_public = (
+        p in ("/", "/index.html", "/index", "/favicon.ico") or
+        "auth/login" in p or
+        request.url.path in ("/", "/index.html", "/index", "/favicon.ico") or
+        "auth/login" in request.url.path or
+        (matched and "auth/login" in matched) or
+        p.startswith("/static/") or
+        p.startswith("/uploads/")
+    )
+    if is_public:
         return await call_next(request)
 
     # 3. Security guard: check token for EVERY other endpoint
