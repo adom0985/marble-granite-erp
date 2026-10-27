@@ -16,15 +16,24 @@ from excel_exporter import create_invoice_excel
 
 app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="6.0")
 
-BASE_DIR = os.path.dirname(__file__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
-EXPORTS_DIR = os.path.join(BASE_DIR, "exports")
-UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
-WORK_DIR = r"I:\خالي أحمد جلال"
+IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+if IS_VERCEL:
+    EXPORTS_DIR = "/tmp/exports"
+    UPLOADS_DIR = "/tmp/uploads"
+    WORK_DIR = "/tmp/work_dir"
+else:
+    EXPORTS_DIR = os.path.join(BASE_DIR, "exports")
+    UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+    WORK_DIR = r"I:\خالي أحمد جلال"
 
 os.makedirs(EXPORTS_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
+if IS_VERCEL:
+    os.makedirs(WORK_DIR, exist_ok=True)
 
 # Pydantic models
 class InvoiceItemModel(BaseModel):

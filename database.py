@@ -1,7 +1,22 @@
 import sqlite3
 import os
+import shutil
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "marble_erp.db")
+IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ORIGINAL_DB_PATH = os.path.join(BASE_DIR, "data", "marble_erp.db")
+
+if IS_VERCEL:
+    os.makedirs("/tmp/data", exist_ok=True)
+    DB_PATH = "/tmp/data/marble_erp.db"
+    if not os.path.exists(DB_PATH) and os.path.exists(ORIGINAL_DB_PATH):
+        try:
+            shutil.copy2(ORIGINAL_DB_PATH, DB_PATH)
+        except Exception as e:
+            print(f"Error copying DB to /tmp: {e}")
+else:
+    DB_PATH = ORIGINAL_DB_PATH
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
