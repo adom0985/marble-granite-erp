@@ -746,7 +746,7 @@ async function showClientStatement(clientName) {
         
         const specialBtn = document.getElementById("stmt-download-special-btn");
         if (specialBtn) {
-            if (["الحاج صلاح", "أحمد رضا", "أدهم"].includes(stmt.client_name)) {
+            if (["الحاج صلاح", "أحمد رضا", "أدهم", "صديق جعفر"].includes(stmt.client_name)) {
                 specialBtn.style.display = "inline-flex";
                 specialBtn.href = `/api/special-files/${encodeURIComponent(stmt.client_name)}/download`;
             } else {
@@ -1242,4 +1242,16 @@ async function loadMaterials() {
 
 function closeModals() {
     document.querySelectorAll(".modal-overlay").forEach(m => m.style.display = "none");
+}
+
+function startNewInvoiceForClient(clientName) {
+    clearInvoiceForm();
+    const clientInput = document.getElementById("inv-client-name");
+    if (clientInput) {
+        clientInput.value = clientName;
+    }
+    const newInvBtn = document.querySelector('[data-tab="new-invoice-pane"]');
+    if (newInvBtn) {
+        newInvBtn.click();
+    }
 }
