@@ -221,7 +221,7 @@ function recalculateAll() {
         if (isFree && qty > 0) totalFreePieces += qty;
 
         if (mat && qty > 0) {
-            const suffix = isFree ? " ( فري )" : (wid > 0 ? ` ( ${wid} )` : "");
+            const suffix = isFree ? " ( فري )" : "";
             const label = `${mat}${suffix}`;
             if (!truckMap[label]) {
                 truckMap[label] = {
