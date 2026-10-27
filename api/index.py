@@ -13,18 +13,14 @@ try:
     from server import app
     from fastapi import Request
 
-    @app.get("/api/index.py")
-    def test_vercel_index_py(request: Request):
+    @app.api_route("/{rest_of_path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+    def catch_all_debug(rest_of_path: str, request: Request):
         return {
-            "matched_index_py": True,
-            "path": request.url.path,
-            "query": str(request.url.query),
+            "rest_of_path": rest_of_path,
+            "scope_path": request.scope.get("path"),
+            "url_path": request.url.path,
             "headers": dict(request.headers)
         }
-
-    @app.get("/api/ping")
-    def test_ping():
-        return {"status": "pong"}
 
 except Exception as e:
     import traceback

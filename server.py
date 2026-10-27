@@ -16,18 +16,6 @@ from excel_exporter import create_invoice_excel
 
 app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="6.0")
 
-# Vercel path rewriting middleware to resolve x-matched-path
-@app.middleware("http")
-async def vercel_path_rewrite_middleware(request, call_next):
-    # If Vercel rewrote the request to /api/index.py or similar, get the real matched path
-    matched_path = request.headers.get("x-matched-path")
-    if matched_path and matched_path != request.scope.get("path"):
-        request.scope["path"] = matched_path
-    elif not request.scope.get("path", "").startswith("/api") and not request.scope.get("path", "").startswith("/static") and request.scope.get("path") not in ["/", "/favicon.ico"]:
-        request.scope["path"] = "/api" + request.scope.get("path", "")
-    response = await call_next(request)
-    return response
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
