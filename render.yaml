@@ -2,7 +2,7 @@ services:
   - type: web
     name: marble-granite-erp
     env: python
-    buildCommand: pip install -r requirements.txt && python seed_data.py
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
     plan: free
     autoDeploy: true
