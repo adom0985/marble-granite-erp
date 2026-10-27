@@ -1281,3 +1281,140 @@ function startNewInvoiceForClient(clientName) {
         newInvBtn.click();
     }
 }
+
+
+// ----------------- AUTHENTICATION MANAGER & CYBER SAFE-MODE -----------------
+
+let appInitialized = false;
+
+async function checkAuthAndInit() {
+    const token = localStorage.getItem("erp_token");
+    if (!token) {
+        showLoginScreen();
+        return;
+    }
+
+    // Immediately unlock with saved user to prevent UI flicker
+    const savedUser = localStorage.getItem("erp_user") || "admin";
+    unlockApp(savedUser);
+
+    // Verify silently in the background
+    try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+            const data = await res.json();
+            const navUser = document.getElementById("nav-username");
+            if (navUser && data.username) navUser.innerText = data.username;
+        } else if (res.status === 401) {
+            console.warn("Session expired on server");
+            handleLogout(false);
+        }
+    } catch (e) {
+        console.warn("Offline or transient network issue - preserving session:", e);
+    }
+}
+
+function showLoginScreen() {
+    const overlay = document.getElementById("login-overlay");
+    const appWrapper = document.getElementById("app-wrapper");
+    if (overlay) overlay.style.display = "flex";
+    if (appWrapper) appWrapper.style.display = "none";
+    const passInput = document.getElementById("login-password");
+    if (passInput) passInput.value = "";
+    const userErr = document.getElementById("login-error-msg");
+    if (userErr) userErr.style.display = "none";
+}
+
+function unlockApp(username = "admin") {
+    const overlay = document.getElementById("login-overlay");
+    const appWrapper = document.getElementById("app-wrapper");
+    if (overlay) overlay.style.display = "none";
+    if (appWrapper) appWrapper.style.display = "block";
+    const navUser = document.getElementById("nav-username");
+    if (navUser) navUser.innerText = username;
+
+    if (!appInitialized) {
+        appInitialized = true;
+        initTabs();
+        loadDashboardStats();
+        loadMaterials();
+        loadClients();
+        setupInitialInvoiceRows();
+        loadInvoicesArchive();
+        loadPartnersSummary();
+        loadFactories();
+        loadRepository();
+    }
+}
+
+async function handleLoginSubmit(event) {
+    if (event) event.preventDefault();
+    const usernameInput = document.getElementById("login-username");
+    const passwordInput = document.getElementById("login-password");
+    const errDiv = document.getElementById("login-error-msg");
+    const submitBtn = document.getElementById("login-submit-btn");
+
+    const username = usernameInput ? usernameInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value.trim() : "";
+
+    if (!username || !password) {
+        if (errDiv) {
+            errDiv.innerText = "يرجى إدخال اسم المستخدم وكلمة المرور";
+            errDiv.style.display = "block";
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري التحقق...`;
+    }
+
+    try {
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem("erp_token", data.token);
+            localStorage.setItem("erp_user", data.username || username);
+            document.cookie = `auth_token=${data.token}; path=/; max-age=2592000; SameSite=Lax`;
+            unlockApp(data.username || username);
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            if (errDiv) {
+                errDiv.innerText = errData.detail || "اسم المستخدم أو كلمة المرور غير صحيحة!";
+                errDiv.style.display = "block";
+            }
+        }
+    } catch (e) {
+        if (errDiv) {
+            errDiv.innerText = "فشل الاتصال بالخادم: " + e.message;
+            errDiv.style.display = "block";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> دخول آمن إلى النظام`;
+        }
+    }
+}
+
+async function handleLogout(notify = true) {
+    localStorage.removeItem("erp_token");
+    localStorage.removeItem("erp_user");
+    sessionStorage.clear();
+    document.cookie = "auth_token=; path=/; max-age=0; SameSite=Lax";
+    try {
+        await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {}
+
+    appInitialized = false;
+    showLoginScreen();
+    if (notify) {
+        alert("تم تسجيل الخروج بنجاح وإقفال المنظومة. يمكنك الآن ترك الجهاز بأمان.");
+    }
+}
