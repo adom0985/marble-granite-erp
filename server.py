@@ -830,6 +830,20 @@ def get_client_statement(client_name: str):
         "payments": payments
     }
 
+@app.get("/api/special-files/{client_name}/download")
+def download_special_file(client_name: str):
+    mapping = {
+        "الحاج صلاح": ("الحاج صلاح", "حساب الحاج صلاح - النسخة المطورة 2026.xlsx"),
+        "أحمد رضا": ("أحمد رضا", "حساب احمد رضا - النسخة المطورة 2026.xlsx"),
+        "أدهم": ("أدهم", "ملف أدهم الشامل - النسخة المطورة 2026.xlsx")
+    }
+    if client_name in mapping:
+        folder, filename = mapping[client_name]
+        filepath = os.path.join(WORK_DIR, folder, filename)
+        if os.path.exists(filepath):
+            return FileResponse(filepath, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    raise HTTPException(status_code=404, detail="الملف غير موجود")
+
 @app.post("/api/payments")
 def add_payment(p: PaymentCreateModel):
     conn = get_connection()

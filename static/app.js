@@ -732,6 +732,17 @@ async function showClientStatement(clientName) {
         const stmt = await res.json();
 
         document.getElementById("stmt-client-title").innerText = `سجل فواتير وشغل: ${stmt.client_name}`;
+        
+        const specialBtn = document.getElementById("stmt-download-special-btn");
+        if (specialBtn) {
+            if (["الحاج صلاح", "أحمد رضا", "أدهم"].includes(stmt.client_name)) {
+                specialBtn.style.display = "inline-flex";
+                specialBtn.href = `/api/special-files/${encodeURIComponent(stmt.client_name)}/download`;
+            } else {
+                specialBtn.style.display = "none";
+            }
+        }
+
         const tbody = document.getElementById("stmt-tbody");
         tbody.innerHTML = "";
 
