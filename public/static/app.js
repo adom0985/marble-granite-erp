@@ -270,6 +270,17 @@ function recalculateAll() {
     document.getElementById("sum-tot-qty").innerText = sTotQty;
     document.getElementById("sum-tot-area").innerText = sTotArea.toFixed(3);
     document.getElementById("sum-tot-amount").innerText = sTotAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    const discountVal = parseFloat(document.getElementById("meta-discount") ? document.getElementById("meta-discount").value : 0) || 0;
+    const paidVal = parseFloat(document.getElementById("meta-paid") ? document.getElementById("meta-paid").value : 0) || 0;
+    const netAmount = Math.max(0, totalAmount - discountVal);
+    const remainingAmount = netAmount - paidVal;
+
+    const netEl = document.getElementById("lbl-net-amount");
+    if (netEl) netEl.innerText = netAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+    const remEl = document.getElementById("lbl-remaining-amount");
+    if (remEl) remEl.innerText = remainingAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
 // ----------------- SAVE OR UPDATE INVOICE (تعديل وحفظ مباشر في فولدر العميل) -----------------
@@ -340,10 +351,50 @@ async function saveCurrentInvoice(silent = false) {
     const url = isEdit ? `/api/invoices/${currentViewingInvoiceId}` : "/api/invoices";
     const method = isEdit ? "PUT" : "POST";
 
+    // Immediate Local Persistence
     try {
+        let totQty = 0, totArea = 0, totAmt = 0;
+        items.forEach(it => {
+            totQty += (it.qty || 0);
+            totArea += (it.area || 0);
+            totAmt += (it.total || 0);
+        });
+        const dVal = parseFloat(document.getElementById("meta-discount").value) || 0;
+        const pVal = parseFloat(document.getElementById("meta-paid").value) || 0;
+        const nAmt = Math.round((totAmt - dVal) * 100) / 100;
+        const rAmt = Math.round((nAmt - pVal) * 100) / 100;
+
+        const localRecord = Object.assign({}, payload, {
+            id: currentViewingInvoiceId,
+            total_pieces: totQty,
+            total_area: Math.round(totArea * 1000) / 1000,
+            total_amount: totAmt,
+            discount: dVal,
+            net_amount: nAmt,
+            paid_amount: pVal,
+            remaining_amount: rAmt
+        });
+
+        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
+        if (currentViewingInvoiceId) {
+            localInvoices[currentViewingInvoiceId] = localRecord;
+        }
+        if (invNo) {
+            localInvoices[invNo] = localRecord;
+        }
+        localStorage.setItem("erp_local_invoices", JSON.stringify(localInvoices));
+    } catch(errLocal) {
+        console.error("Local storage error:", errLocal);
+    }
+
+    try {
+        const token = localStorage.getItem("erp_token") || "";
+        const saveHeaders = {"Content-Type": "application/json"};
+        if (token) saveHeaders["Authorization"] = `Bearer ${token}`;
+
         const res = await fetch(url, {
             method: method,
-            headers: {"Content-Type": "application/json"},
+            headers: saveHeaders,
             body: JSON.stringify(payload)
         });
         const data = await res.json();
@@ -738,7 +789,17 @@ async function loadInvoicesArchive() {
         const token = localStorage.getItem("erp_token") || "";
         const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
 
+        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
         list.forEach(inv => {
+            const loc = localInvoices[inv.id] || localInvoices[inv.invoice_no];
+            if (loc) {
+                inv.total_amount = loc.total_amount !== undefined ? loc.total_amount : inv.total_amount;
+                inv.net_amount = loc.net_amount !== undefined ? loc.net_amount : inv.net_amount;
+                inv.total_pieces = loc.total_pieces !== undefined ? loc.total_pieces : inv.total_pieces;
+                inv.total_area = loc.total_area !== undefined ? loc.total_area : inv.total_area;
+                inv.paid_amount = loc.paid_amount !== undefined ? loc.paid_amount : inv.paid_amount;
+                inv.remaining_amount = (inv.net_amount !== undefined ? inv.net_amount : inv.total_amount) - (inv.paid_amount || 0);
+            }
             const tr = document.createElement("tr");
 
             // Client badge colors
@@ -790,7 +851,17 @@ async function directShareWhatsApp(id) {
 async function viewInvoiceDetail(id) {
     try {
         const res = await fetch(`/api/invoices/${id}`);
-        const inv = await res.json();
+        let inv = await res.json();
+
+        // Check and apply local edits if present
+        try {
+            const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
+            if (localInvoices[id] || (inv && localInvoices[inv.invoice_no])) {
+                const loc = localInvoices[id] || localInvoices[inv.invoice_no];
+                inv = Object.assign({}, inv, loc);
+            }
+        } catch(eLoc) {}
+
         currentViewingInvoiceId = inv.id;
 
         document.getElementById("meta-inv-no").value = inv.invoice_no;
@@ -943,8 +1014,19 @@ async function showClientStatement(clientName) {
         // Build chronological combined ledger (7 columns)
         const ledger = [];
         const invoices = (stmt.active_invoices && stmt.active_invoices.length > 0) ? stmt.active_invoices : (stmt.invoices || []);
+        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
         
+        let calcDebit = 0;
         invoices.forEach(inv => {
+            const loc = localInvoices[inv.id] || localInvoices[inv.invoice_no];
+            if (loc) {
+                inv.net_amount = loc.net_amount !== undefined ? loc.net_amount : (loc.total_amount || inv.net_amount);
+                inv.total_pieces = loc.total_pieces !== undefined ? loc.total_pieces : inv.total_pieces;
+                inv.total_area = loc.total_area !== undefined ? loc.total_area : inv.total_area;
+                if (loc.notes) inv.notes = loc.notes;
+            }
+            calcDebit += Number(inv.net_amount || 0);
+
             ledger.push({
                 type: 'invoice',
                 date: inv.invoice_date || '',
@@ -955,6 +1037,13 @@ async function showClientStatement(clientName) {
                 id: inv.id
             });
         });
+
+        // Recalculate and update top summary cards with live modified totals
+        const totalPayments = Number(stmt.total_payments || 0);
+        const calcRemaining = calcDebit - totalPayments;
+        if (debitEl) debitEl.innerText = `${calcDebit.toLocaleString()} ج.م`;
+        if (creditEl) creditEl.innerText = `${totalPayments.toLocaleString()} ج.م`;
+        if (balanceEl) balanceEl.innerText = `${calcRemaining.toLocaleString()} ج.م`;
 
         (stmt.payments || []).forEach(p => {
             ledger.push({

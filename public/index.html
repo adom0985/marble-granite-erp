@@ -381,10 +381,10 @@
                         <td class="cell-yellow">رقم الفاتوره</td>
                         <td><input type="text" id="meta-inv-no" class="meta-input" style="color:#b91c1c; font-weight:800;"></td>
                         <td class="cell-yellow">الدفعة المسددة</td>
-                        <td><input type="number" id="meta-paid" class="meta-input" value="0" placeholder="المدفوع كاش..."></td>
+                        <td><input type="number" id="meta-paid" class="meta-input" value="0" placeholder="المدفوع كاش..." oninput="recalculateAll()"></td>
                         <td style="width: 2%;"></td>
                         <td class="cell-yellow">خصم / تسوية</td>
-                        <td><input type="number" id="meta-discount" class="meta-input" value="0"></td>
+                        <td><input type="number" id="meta-discount" class="meta-input" value="0" oninput="recalculateAll()"></td>
                     </tr>
                 </table>
 
@@ -421,6 +421,12 @@
                             <td id="lbl-total-amount" style="font-size:1.2rem;">0.00</td>
                             <td></td>
                             <td></td>
+                            <td class="no-print"></td>
+                        </tr>
+                        <tr style="background:#f8fafc; font-weight:700; color:#475569; font-size:0.95rem;">
+                            <td colspan="3" style="text-align:center;">الصافي والمتبقي</td>
+                            <td colspan="3" style="text-align:right; padding-right:15px;">الصافي بعد الخصم: <b id="lbl-net-amount" style="color:#1e3a8a; font-size:1.05rem;">0.00</b> ج.م</td>
+                            <td colspan="5" style="text-align:right; padding-right:15px;">المتبقي بعد الدفعة: <b id="lbl-remaining-amount" style="color:#b91c1c; font-size:1.15rem;">0.00</b> ج.م</td>
                             <td class="no-print"></td>
                         </tr>
                     </tfoot>
@@ -795,6 +801,6 @@
 
     <!-- Partner Expense Modal -->
     </div> <!-- End app-wrapper -->
-    <script src="/static/app.js?v=20261028_v12"></script>
+    <script src="/static/app.js?v=20261028_v13"></script>
 </body>
 </html>
