@@ -809,6 +809,111 @@ def export_invoice_pdf_endpoint(invoice_id: int):
     }
     return FileResponse(out_file, media_type="application/pdf", headers=headers)
 
+
+@app.post("/api/invoices/export-pdf-direct")
+@app.post("/invoices/export-pdf-direct")
+def export_invoice_pdf_direct(data: InvoiceCreateModel):
+    invoice_dict = data.dict()
+    items = []
+    tot_qty = 0
+    tot_area = 0
+    tot_amount = 0
+    for idx, it in enumerate(data.items, start=1):
+        d = it.dict() if hasattr(it, 'dict') else dict(it)
+        q = float(d.get('qty') or 0)
+        l = float(d.get('length') or 0)
+        w = float(d.get('width') or 0)
+        is_free = bool(d.get('is_free'))
+        p = 0.0 if is_free else float(d.get('price') or 0)
+        ar = round(q * l * w, 4) if (q > 0 and l > 0 and w > 0) else float(d.get('area') or 0)
+        line_tot = 0.0 if is_free else round(ar * p, 2)
+        d['qty'] = q
+        d['length'] = l
+        d['width'] = w
+        d['area'] = ar
+        d['price'] = p
+        d['total'] = line_tot
+        d['row_index'] = idx
+        tot_qty += q
+        tot_area += ar
+        tot_amount += line_tot
+        items.append(d)
+    
+    invoice_dict['items'] = items
+    invoice_dict['total_pieces'] = tot_qty
+    invoice_dict['total_area'] = round(tot_area, 3)
+    invoice_dict['total_amount'] = tot_amount
+    net_amount = round(tot_amount - (data.discount or 0), 2)
+    invoice_dict['net_amount'] = net_amount
+    invoice_dict['remaining_amount'] = round(net_amount - (data.paid_amount or 0), 2)
+
+    clean_no = re.sub(r'[\s/\\:*?"<>|]+', '_', invoice_dict['invoice_no']).strip('_')
+    filename = f"Invoice_{clean_no}_{invoice_dict['invoice_date']}.pdf"
+    out_file = os.path.join(EXPORTS_DIR, filename)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
+    generate_invoice_pdf(invoice_dict, out_file)
+
+    encoded_filename = urllib.parse.quote(f"فاتورة_{clean_no}.pdf")
+    headers = {
+        "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    return FileResponse(out_file, media_type="application/pdf", headers=headers)
+
+@app.post("/api/invoices/export-excel-direct")
+@app.post("/invoices/export-excel-direct")
+def export_invoice_excel_direct(data: InvoiceCreateModel):
+    invoice_dict = data.dict()
+    items = []
+    tot_qty = 0
+    tot_area = 0
+    tot_amount = 0
+    for idx, it in enumerate(data.items, start=1):
+        d = it.dict() if hasattr(it, 'dict') else dict(it)
+        q = float(d.get('qty') or 0)
+        l = float(d.get('length') or 0)
+        w = float(d.get('width') or 0)
+        is_free = bool(d.get('is_free'))
+        p = 0.0 if is_free else float(d.get('price') or 0)
+        ar = round(q * l * w, 4) if (q > 0 and l > 0 and w > 0) else float(d.get('area') or 0)
+        line_tot = 0.0 if is_free else round(ar * p, 2)
+        d['qty'] = q
+        d['length'] = l
+        d['width'] = w
+        d['area'] = ar
+        d['price'] = p
+        d['total'] = line_tot
+        d['row_index'] = idx
+        tot_qty += q
+        tot_area += ar
+        tot_amount += line_tot
+        items.append(d)
+    
+    invoice_dict['items'] = items
+    invoice_dict['total_pieces'] = tot_qty
+    invoice_dict['total_area'] = round(tot_area, 3)
+    invoice_dict['total_amount'] = tot_amount
+    net_amount = round(tot_amount - (data.discount or 0), 2)
+    invoice_dict['net_amount'] = net_amount
+    invoice_dict['remaining_amount'] = round(net_amount - (data.paid_amount or 0), 2)
+
+    clean_no = re.sub(r'[\s/\\:*?"<>|]+', '_', invoice_dict['invoice_no']).strip('_')
+    filename = f"Invoice_{clean_no}_{invoice_dict['invoice_date']}.xlsx"
+    out_file = os.path.join(EXPORTS_DIR, filename)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
+    create_invoice_excel(invoice_dict, out_file)
+
+    encoded_filename = urllib.parse.quote(f"فاتورة_{clean_no}.xlsx")
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    return FileResponse(out_file, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers=headers)
+
 @app.get("/api/invoices/{invoice_id}/whatsapp-link")
 def get_whatsapp_link(invoice_id: int, phone: Optional[str] = None):
     conn = get_connection()

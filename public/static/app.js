@@ -398,42 +398,141 @@ async function shareInvoiceWhatsApp() {
     }
 }
 
-async function exportCurrentInvoiceExcel() {
-    const saveBtn = document.getElementById("btn-export-excel-current");
-    const origText = saveBtn ? saveBtn.innerHTML : "";
-    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحديث والتصدير...';
-    try {
-        await saveCurrentInvoice(true); // حفظ تلقائي فوري لأي تعديلات قبل التصدير
-    } catch(e) {}
-    if (saveBtn) saveBtn.innerHTML = origText;
+function getCurrentInvoicePayload() {
+    const invNo = document.getElementById("meta-inv-no").value.trim();
+    const invDate = document.getElementById("meta-inv-date").value.trim();
+    const client = document.getElementById("meta-client-name").value.trim();
 
-    if (!currentViewingInvoiceId) {
-        alert("يرجى حفظ الفاتورة أولاً!");
-        return;
-    }
-    const token = localStorage.getItem("erp_token") || "";
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
-    const cacheBuster = `_t=${Date.now()}`;
-    window.location.href = `/api/invoices/${currentViewingInvoiceId}/export-excel?${cacheBuster}${tokenParam}`;
+    const rows = document.querySelectorAll("#invoice-items-tbody tr");
+    const items = [];
+
+    rows.forEach((tr, idx) => {
+        const mat = tr.querySelector(".col-mat").value.trim();
+        const qty = parseFloat(tr.querySelector(".col-qty").value) || 0;
+        const len = parseFloat(tr.querySelector(".col-len").value) || 0;
+        const wid = parseFloat(tr.querySelector(".col-wid").value) || 0;
+        const area = parseFloat(tr.querySelector(".col-area").value) || 0;
+        const isFree = tr.querySelector(".col-free").checked;
+        const prc = isFree ? 0 : (parseFloat(tr.querySelector(".col-prc").value) || 0);
+        const tot = isFree ? 0 : (parseFloat(tr.querySelector(".col-tot").value) || 0);
+        const pkg = tr.querySelector(".col-pkg").value.trim();
+        const blk = tr.querySelector(".col-blk").value.trim();
+        const nts = tr.querySelector(".col-notes").value.trim();
+
+        if (mat && qty > 0) {
+            items.push({
+                row_index: idx + 1,
+                package_no: pkg,
+                block_no: blk,
+                material_name: mat,
+                qty: qty,
+                length: len,
+                width: wid,
+                area: area,
+                price: prc,
+                total: tot,
+                is_free: isFree,
+                notes: nts
+            });
+        }
+    });
+
+    return {
+        invoice_no: invNo || "فاتورة",
+        invoice_date: invDate || new Date().toISOString().split("T")[0],
+        client_name: client || "عميل عام",
+        driver_name: document.getElementById("meta-driver-name").value.trim(),
+        car_no: document.getElementById("meta-car-no").value.trim(),
+        loading_place: document.getElementById("meta-loading-place").value.trim(),
+        supervisor: document.getElementById("meta-supervisor").value.trim(),
+        discount: parseFloat(document.getElementById("meta-discount").value) || 0,
+        paid_amount: parseFloat(document.getElementById("meta-paid").value) || 0,
+        notes: document.getElementById("meta-notes").value.trim(),
+        items: items
+    };
 }
 
 async function exportCurrentInvoicePDF() {
-    const saveBtn = document.getElementById("btn-export-pdf-current");
-    const origText = saveBtn ? saveBtn.innerHTML : "";
-    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحديث والتصدير...';
-    try {
-        await saveCurrentInvoice(true); // حفظ تلقائي فوري لأي تعديلات قبل التصدير
-    } catch(e) {}
-    if (saveBtn) saveBtn.innerHTML = origText;
-
-    if (!currentViewingInvoiceId) {
-        alert("يرجى حفظ الفاتورة أولاً!");
+    const payload = getCurrentInvoicePayload();
+    if (payload.items.length === 0) {
+        alert("يرجى إضافة بند واحد على الأقل في الفاتورة!");
         return;
     }
-    const token = localStorage.getItem("erp_token") || "";
-    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
-    const cacheBuster = `_t=${Date.now()}`;
-    window.open(`/api/invoices/${currentViewingInvoiceId}/export-pdf?${cacheBuster}${tokenParam}`, "_blank");
+
+    const btn = document.getElementById("btn-export-pdf-current");
+    const origText = btn ? btn.innerHTML : "";
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التجهيز...';
+
+    // Auto-save in background
+    try { saveCurrentInvoice(true); } catch(e) {}
+
+    try {
+        const token = localStorage.getItem("erp_token") || "";
+        const headers = {"Content-Type": "application/json"};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const res = await fetch("/api/invoices/export-pdf-direct", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            throw new Error(`خطأ في التصدير (${res.status})`);
+        }
+
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        window.open(blobUrl, "_blank");
+    } catch(err) {
+        alert("فشل تصدير PDF المباشر: " + err.message);
+    } finally {
+        if (btn) btn.innerHTML = origText;
+    }
+}
+
+async function exportCurrentInvoiceExcel() {
+    const payload = getCurrentInvoicePayload();
+    if (payload.items.length === 0) {
+        alert("يرجى إضافة بند واحد على الأقل في الفاتورة!");
+        return;
+    }
+
+    const btn = document.getElementById("btn-export-excel-current");
+    const origText = btn ? btn.innerHTML : "";
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التجهيز...';
+
+    // Auto-save in background
+    try { saveCurrentInvoice(true); } catch(e) {}
+
+    try {
+        const token = localStorage.getItem("erp_token") || "";
+        const headers = {"Content-Type": "application/json"};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const res = await fetch("/api/invoices/export-excel-direct", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            throw new Error(`خطأ في التصدير (${res.status})`);
+        }
+
+        const blob = await res.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = `فاتورة_${payload.invoice_no}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    } catch(err) {
+        alert("فشل تصدير الإكسيل المباشر: " + err.message);
+    } finally {
+        if (btn) btn.innerHTML = origText;
+    }
 }
 
 // ----------------- ATTACHMENTS & PHOTOS -----------------
