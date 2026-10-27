@@ -1,11 +1,8 @@
 {
-  "version": 2,
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "**"
-    }
-  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index.py" }
+    {
+      "source": "/(.*)",
+      "destination": "/main.py"
+    }
   ]
 }
