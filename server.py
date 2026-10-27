@@ -175,7 +175,7 @@ def get_repository_tree():
         if os.path.isfile(p) and not it.startswith("~$"):
             root_files.append({
                 "name": it,
-                "rel_path": it,
+                "rel_path": it.replace("\\", "/"),
                 "size_kb": round(os.path.getsize(p) / 1024, 1),
                 "ext": os.path.splitext(it)[1].lower(),
                 "mtime": datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y-%m-%d %H:%M")
@@ -198,7 +198,7 @@ def get_repository_tree():
                     if f.startswith("~$"):
                         continue
                     fp = os.path.join(root, f)
-                    rel = os.path.relpath(fp, WORK_DIR)
+                    rel = os.path.relpath(fp, WORK_DIR).replace("\\", "/")
                     sub_files.append({
                         "name": f,
                         "rel_path": rel,
@@ -218,7 +218,8 @@ def get_repository_tree():
 
 @app.get("/api/repository/download")
 def download_repository_file(path: str):
-    full_path = os.path.abspath(os.path.join(WORK_DIR, path))
+    clean_path = path.replace("/", os.sep).replace("\\", os.sep).lstrip(os.sep)
+    full_path = os.path.abspath(os.path.join(WORK_DIR, clean_path))
     if not full_path.startswith(os.path.abspath(WORK_DIR)) or not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="الملف غير موجود في المستودع")
     
@@ -227,22 +228,28 @@ def download_repository_file(path: str):
 
 @app.get("/api/repository/preview")
 def preview_repository_file(path: str):
-    full_path = os.path.abspath(os.path.join(WORK_DIR, path))
-    if not full_path.startswith(os.path.abspath(WORK_DIR)) or not os.path.exists(full_path):
-        raise HTTPException(status_code=404, detail="الملف غير موجود في المستودع")
+    clean_path = path.replace("/", os.sep).replace("\\", os.sep).lstrip(os.sep)
+    full_path = os.path.abspath(os.path.join(WORK_DIR, clean_path))
+    filename = os.path.basename(full_path) or os.path.basename(path)
+
+    if not os.path.exists(full_path):
+        return {
+            "type": "error",
+            "filename": filename,
+            "error": "الملف غير موجود على هذا المسار في القرص الصلب أو تعذر الوصول إليه"
+        }
     
     ext = os.path.splitext(full_path)[1].lower()
-    filename = os.path.basename(full_path)
 
     if ext == ".xlsx":
         try:
             wb = openpyxl.load_workbook(full_path, data_only=True)
             sheets_data = {}
-            for s in wb.sheetnames[:4]:
+            for s in wb.sheetnames[:6]:
                 ws = wb[s]
                 rows = []
-                for r in range(1, min(ws.max_row + 1, 40)):
-                    row_vals = [str(ws.cell(row=r, column=c).value or "") for c in range(1, min(ws.max_column + 1, 14))]
+                for r in range(1, min(ws.max_row + 1, 60)):
+                    row_vals = [str(ws.cell(row=r, column=c).value or "") for c in range(1, min(ws.max_column + 1, 16))]
                     if any(v.strip() for v in row_vals):
                         rows.append(row_vals)
                 sheets_data[s] = rows
@@ -253,7 +260,7 @@ def preview_repository_file(path: str):
                 "sheets_data": sheets_data
             }
         except Exception as e:
-            return {"type": "error", "error": f"تعذر قراءة ملف الإكسيل: {str(e)}"}
+            return {"type": "error", "filename": filename, "error": f"تعذر قراءة ملف الإكسيل: {str(e)}"}
 
     elif ext == ".pdf":
         try:
@@ -266,7 +273,7 @@ def preview_repository_file(path: str):
                 "text": "\n--- فاصل صفحات ---\n".join(pages_text[:5])
             }
         except Exception as e:
-            return {"type": "error", "error": f"تعذر قراءة ملف الـ PDF: {str(e)}"}
+            return {"type": "error", "filename": filename, "error": f"تعذر قراءة ملف الـ PDF: {str(e)}"}
 
     elif ext in [".jpg", ".jpeg", ".png", ".jfif"]:
         return {
