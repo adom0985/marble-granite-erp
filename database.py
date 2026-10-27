@@ -6,7 +6,7 @@ IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ORIGINAL_DB_PATH = os.path.join(BASE_DIR, "data", "marble_erp.db")
 
-DB_VERSION = "2026_10_28_v4"
+DB_VERSION = "2026_10_28_v5"
 if IS_VERCEL:
     os.makedirs("/tmp/data", exist_ok=True)
     DB_PATH = f"/tmp/data/marble_erp_{DB_VERSION}.db"
