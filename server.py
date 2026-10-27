@@ -1015,6 +1015,18 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 def serve_index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
+# Mirror all /api/... routes without /api prefix for Vercel Serverless compatibility
+for route in list(app.routes):
+    if hasattr(route, "path") and route.path.startswith("/api/"):
+        non_api_path = route.path[4:]
+        if hasattr(route, "endpoint") and hasattr(route, "methods"):
+            app.add_api_route(
+                non_api_path,
+                route.endpoint,
+                methods=route.methods,
+                include_in_schema=False
+            )
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
