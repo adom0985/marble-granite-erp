@@ -14,7 +14,7 @@ import fitz
 from database import get_connection, init_db
 from excel_exporter import create_invoice_excel
 
-app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="5.0")
+app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="6.0")
 
 BASE_DIR = os.path.dirname(__file__)
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -136,6 +136,29 @@ def calculate_truck_summary(items):
         v["total_amount"] = 0 if v["is_free"] else round(v["total_area"] * v["price"], 2)
         summary_list.append(v)
     return summary_list
+
+def save_invoice_to_client_folder(invoice_dict):
+    """
+    Saves an exact .xlsx file directly into the client's physical folder on disk at:
+    I:\خالي أحمد جلال\<client_name>\<inv_date> - <inv_no>.xlsx
+    """
+    client_name = (invoice_dict.get("client_name") or "فواتير عامة").strip()
+    safe_client = re.sub(r'[\\/*?:"<>|]', "", client_name)
+    
+    target_folder = os.path.join(WORK_DIR, safe_client)
+    os.makedirs(target_folder, exist_ok=True)
+
+    inv_date = str(invoice_dict.get("invoice_date", datetime.now().strftime("%Y-%m-%d")))
+    inv_no = str(invoice_dict.get("invoice_no", "INV"))
+    safe_file_name = f"{inv_date} - {inv_no}.xlsx".replace(":", "-").replace("/", "-")
+    target_path = os.path.join(target_folder, safe_file_name)
+
+    try:
+        create_invoice_excel(invoice_dict, target_path)
+        return target_path
+    except Exception as e:
+        print(f"Error auto-saving invoice to client folder: {e}")
+        return None
 
 # ----------------- REPOSITORY ENDPOINTS (مستودع الملفات والشغل) -----------------
 
@@ -266,7 +289,7 @@ async def upload_file_to_repository(folder: str = Form(""), file: UploadFile = F
 
     return {"status": "success", "message": f"تم حفظ الملف بنجاح داخل مجلد {folder or 'الرئيسي'}"}
 
-# ----------------- INVOICES API (CRUD + EDIT ANYTIME) -----------------
+# ----------------- INVOICES API (CRUD + DISK AUTO-SAVE) -----------------
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats():
@@ -276,19 +299,15 @@ def get_dashboard_stats():
     c.execute("SELECT COUNT(*), COALESCE(SUM(total_amount), 0), COALESCE(SUM(total_pieces), 0), COALESCE(SUM(total_area), 0) FROM invoices")
     inv_count, total_sales, total_pieces, total_area = c.fetchone()
 
-    c.execute("SELECT COALESCE(SUM(amount_egp), 0) FROM client_payments")
-    total_paid = c.fetchone()[0]
-
-    c.execute("SELECT COALESCE(SUM(opening_balance), 0) FROM clients")
-    total_opening = c.fetchone()[0]
-
-    total_receivables = (total_sales + total_opening) - total_paid
-
-    c.execute("SELECT COALESCE(SUM(amount), 0) FROM partner_expenses")
-    total_expenses = c.fetchone()[0]
-
+    # Get total repository files count
     c.execute("SELECT COUNT(*) FROM clients")
     clients_count = c.fetchone()[0]
+
+    # Count actual files on disk
+    disk_files_count = 0
+    if os.path.exists(WORK_DIR):
+        for root, dirs, files in os.walk(WORK_DIR):
+            disk_files_count += sum(1 for f in files if not f.startswith("~$"))
 
     c.execute("""
     SELECT material_name, SUM(qty) as total_qty, ROUND(SUM(area), 2) as total_m2, ROUND(SUM(total), 2) as total_revenue
@@ -308,10 +327,8 @@ def get_dashboard_stats():
         "total_sales": round(total_sales, 2),
         "total_pieces": int(total_pieces),
         "total_area": round(total_area, 2),
-        "total_paid": round(total_paid, 2),
-        "total_receivables": round(total_receivables, 2),
-        "total_expenses": round(total_expenses, 2),
         "clients_count": clients_count,
+        "disk_files_count": disk_files_count,
         "top_materials": top_materials,
         "recent_invoices": recent_invoices
     }
@@ -449,9 +466,27 @@ def create_invoice(data: InvoiceCreateModel):
     finally:
         conn.close()
 
-    return {"status": "success", "invoice_id": inv_id, "invoice_no": data.invoice_no}
+    # AUTO-SAVE DIRECTLY INTO CLIENT FOLDER ON HARD DISK (I:\خالي أحمد جلال\<client_name>)
+    full_inv_dict = {
+        "invoice_no": data.invoice_no,
+        "invoice_date": data.invoice_date,
+        "client_name": data.client_name,
+        "driver_name": data.driver_name,
+        "car_no": data.car_no,
+        "loading_place": data.loading_place,
+        "supervisor": data.supervisor,
+        "items": computed_items
+    }
+    saved_path = save_invoice_to_client_folder(full_inv_dict)
 
-# EDIT INVOICE AT ANY TIME
+    return {
+        "status": "success", 
+        "invoice_id": inv_id, 
+        "invoice_no": data.invoice_no,
+        "saved_to_disk": saved_path
+    }
+
+# EDIT INVOICE AT ANY TIME (AND AUTO-UPDATE DISK FILE)
 @app.put("/api/invoices/{invoice_id}")
 def update_invoice(invoice_id: int, data: InvoiceCreateModel):
     conn = get_connection()
@@ -504,7 +539,6 @@ def update_invoice(invoice_id: int, data: InvoiceCreateModel):
     rem_amt = round(net_amt - (data.paid_amount or 0), 2)
 
     try:
-        # Update invoice
         c.execute("""
         UPDATE invoices SET
             invoice_no = ?, invoice_date = ?, client_name = ?, driver_name = ?, car_no = ?,
@@ -517,7 +551,6 @@ def update_invoice(invoice_id: int, data: InvoiceCreateModel):
             data.discount, net_amt, data.paid_amount, rem_amt, data.notes, invoice_id
         ))
 
-        # Replace items
         c.execute("DELETE FROM invoice_items WHERE invoice_id = ?", (invoice_id,))
         for it in computed_items:
             c.execute("""
@@ -532,7 +565,6 @@ def update_invoice(invoice_id: int, data: InvoiceCreateModel):
 
         c.execute("INSERT OR IGNORE INTO clients (name) VALUES (?)", (data.client_name,))
 
-        # Update payments linked to this invoice
         c.execute("DELETE FROM client_payments WHERE invoice_id = ?", (invoice_id,))
         if data.paid_amount and data.paid_amount > 0:
             c.execute("""
@@ -547,7 +579,26 @@ def update_invoice(invoice_id: int, data: InvoiceCreateModel):
     finally:
         conn.close()
 
-    return {"status": "success", "invoice_id": invoice_id, "invoice_no": data.invoice_no, "message": "تم تعديل الفاتورة وحساب العميل بنجاح"}
+    # AUTO-UPDATE DIRECTLY IN CLIENT FOLDER ON HARD DISK
+    full_inv_dict = {
+        "invoice_no": data.invoice_no,
+        "invoice_date": data.invoice_date,
+        "client_name": data.client_name,
+        "driver_name": data.driver_name,
+        "car_no": data.car_no,
+        "loading_place": data.loading_place,
+        "supervisor": data.supervisor,
+        "items": computed_items
+    }
+    saved_path = save_invoice_to_client_folder(full_inv_dict)
+
+    return {
+        "status": "success", 
+        "invoice_id": invoice_id, 
+        "invoice_no": data.invoice_no, 
+        "saved_to_disk": saved_path,
+        "message": "تم تعديل الفاتورة وتحديث ملف الإكسيل في مجلد العميل بنجاح"
+    }
 
 @app.delete("/api/invoices/{invoice_id}")
 def delete_invoice(invoice_id: int):
@@ -717,7 +768,7 @@ def parse_order_text(order: ParseOrderTextModel):
 
     return {"status": "success", "parsed_items": items}
 
-# ----------------- CLIENTS & LEDGER -----------------
+# ----------------- CLIENTS (STANDALONE PROFILES) -----------------
 
 @app.get("/api/clients")
 def get_clients():
@@ -726,18 +777,15 @@ def get_clients():
     c.execute("""
     SELECT 
         c.*,
-        COALESCE(SUM(i.net_amount), 0) as total_invoiced,
-        COALESCE((SELECT SUM(amount_egp) FROM client_payments WHERE client_name = c.name), 0) as total_paid
+        COUNT(i.id) as invoices_count,
+        COALESCE(SUM(i.total_amount), 0) as total_invoiced,
+        COALESCE(SUM(i.total_pieces), 0) as total_pieces_count
     FROM clients c
     LEFT JOIN invoices i ON c.name = i.client_name
     GROUP BY c.id
     ORDER BY c.name ASC
     """)
-    rows = []
-    for r in c.fetchall():
-        d = dict(r)
-        d["current_balance"] = round((d["opening_balance"] or 0) + d["total_invoiced"] - d["total_paid"], 2)
-        rows.append(d)
+    rows = [dict(r) for r in c.fetchall()]
     conn.close()
     return rows
 
@@ -764,78 +812,22 @@ def get_client_statement(client_name: str):
 
     c.execute("SELECT * FROM clients WHERE name = ?", (client_name,))
     cl = c.fetchone()
-    opening_bal = cl["opening_balance"] if cl else 0
 
-    c.execute("SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, notes FROM invoices WHERE client_name = ? ORDER BY invoice_date ASC", (client_name,))
+    # Get invoices for this client independently
+    c.execute("SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, paid_amount, remaining_amount, notes FROM invoices WHERE client_name = ? ORDER BY invoice_date DESC", (client_name,))
     invoices = [dict(r) for r in c.fetchall()]
 
-    c.execute("SELECT id, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes FROM client_payments WHERE client_name = ? ORDER BY payment_date ASC", (client_name,))
+    # Get payments for this client independently
+    c.execute("SELECT id, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes FROM client_payments WHERE client_name = ? ORDER BY payment_date DESC", (client_name,))
     payments = [dict(r) for r in c.fetchall()]
-
-    ledger_entries = []
-    running_balance = opening_bal
-
-    ledger_entries.append({
-        "date": "رصيد افتتاحي",
-        "type": "رصيد سابق",
-        "doc_no": "-",
-        "description": "رصيد سابق / افتتاحي",
-        "debit": opening_bal if opening_bal > 0 else 0,
-        "credit": abs(opening_bal) if opening_bal < 0 else 0,
-        "balance": running_balance
-    })
-
-    combined = []
-    for inv in invoices:
-        combined.append({
-            "sort_date": inv["invoice_date"],
-            "type": "فاتورة",
-            "doc_no": inv["invoice_no"],
-            "description": f"فاتورة مبيعات ({inv['total_pieces']} قطعة - {inv['total_area']} م٢) - {inv['notes'] or ''}",
-            "debit": inv["net_amount"],
-            "credit": 0
-        })
-    for p in payments:
-        desc = f"دفعة {p['payment_method']}"
-        if p["currency"] != "EGP":
-            desc += f" ({p['amount']} {p['currency']} × {p['exchange_rate']})"
-        if p["notes"]:
-            desc += f" - {p['notes']}"
-        combined.append({
-            "sort_date": p["payment_date"],
-            "type": "دفعة مسددة",
-            "doc_no": f"PAY-{p['id']}",
-            "description": desc,
-            "debit": 0,
-            "credit": p["amount_egp"]
-        })
-
-    combined.sort(key=lambda x: x["sort_date"])
-
-    for item in combined:
-        running_balance += (item["debit"] - item["credit"])
-        ledger_entries.append({
-            "date": item["sort_date"],
-            "type": item["type"],
-            "doc_no": item["doc_no"],
-            "description": item["description"],
-            "debit": item["debit"],
-            "credit": item["credit"],
-            "balance": round(running_balance, 2)
-        })
-
-    total_debit = sum(e["debit"] for e in ledger_entries)
-    total_credit = sum(e["credit"] for e in ledger_entries)
 
     conn.close()
     return {
         "client_name": client_name,
         "phone": cl["phone"] if cl else "",
-        "opening_balance": opening_bal,
-        "total_debit": round(total_debit, 2),
-        "total_credit": round(total_credit, 2),
-        "final_balance": round(running_balance, 2),
-        "entries": ledger_entries
+        "notes": cl["notes"] if cl else "",
+        "invoices": invoices,
+        "payments": payments
     }
 
 @app.post("/api/payments")

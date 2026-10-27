@@ -47,10 +47,9 @@ function setupInitialInvoiceRows(count = 7) {
     tbody.innerHTML = "";
     currentViewingInvoiceId = null;
     
-    // Reset save button label
     const saveBtn = document.getElementById("btn-save-invoice");
     if (saveBtn) {
-        saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> حفظ الفاتورة في النظام';
+        saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> حفظ الفاتورة في النظام والفولدر';
         saveBtn.className = "btn btn-success";
     }
 
@@ -257,7 +256,7 @@ function recalculateAll() {
     document.getElementById("sum-tot-amount").innerText = sTotAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
-// ----------------- SAVE OR UPDATE INVOICE (تعديل في أي وقت) -----------------
+// ----------------- SAVE OR UPDATE INVOICE (تعديل وحفظ مباشر في فولدر العميل) -----------------
 
 async function saveCurrentInvoice() {
     const invNo = document.getElementById("meta-inv-no").value.trim();
@@ -342,11 +341,17 @@ async function saveCurrentInvoice() {
             saveBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> حفظ التعديلات على الفاتورة';
             saveBtn.className = "btn btn-primary";
 
-            const actionMsg = isEdit ? "تم تعديل الفاتورة وتحديث حساب العميل بنجاح!" : `تم حفظ الفاتورة بنجاح برقم: ${data.invoice_no}`;
-            alert(`✅ ${actionMsg}`);
+            const actionMsg = isEdit ? "تم حفظ التعديلات بنجاح!" : `تم حفظ الفاتورة بنجاح برقم: ${data.invoice_no}`;
+            let diskMsg = "";
+            if (data.saved_to_disk) {
+                diskMsg = `\n📁 تم حفظ ملف الإكسيل تلقائياً في فولدر العميل على جهازك:\n${data.saved_to_disk}`;
+            }
+            alert(`✅ ${actionMsg}${diskMsg}`);
+
             loadDashboardStats();
             loadInvoicesArchive();
             loadClientsList();
+            loadRepository();
         } else {
             alert("حدث خطأ أثناء الحفظ: " + (data.detail || ""));
         }
@@ -463,7 +468,7 @@ async function processSmartOrderText() {
 // ----------------- SAMPLE PRE-FILL -----------------
 
 function prefillSampleInvoice() {
-    document.getElementById("meta-inv-no").value = "INV-2026-005";
+    document.getElementById("meta-inv-no").value = "INV-2026-006";
     document.getElementById("meta-inv-date").value = "2026-04-14";
     document.getElementById("meta-client-name").value = "الحاج جعفر";
     document.getElementById("meta-driver-name").value = "أحمد / 01017828662";
@@ -496,7 +501,7 @@ function prefillSampleInvoice() {
 }
 
 function clearInvoiceForm() {
-    if (confirm("هل أنت متأكد من تفريغ الفاتورة وإنشاء فاتورة جديدة؟")) {
+    if (confirm("هل أنت متأكد من تفريغ الشاشة وتحرير فاتورة جديدة؟")) {
         setupInitialInvoiceRows(6);
     }
 }
@@ -509,11 +514,9 @@ async function loadDashboardStats() {
         const data = await res.json();
 
         document.getElementById("stat-sales").innerText = Number(data.total_sales).toLocaleString() + " ج.م";
-        document.getElementById("stat-receivables").innerText = Number(data.total_receivables).toLocaleString() + " ج.م";
         document.getElementById("stat-pieces").innerText = Number(data.total_pieces).toLocaleString() + " طاولات وترابيع";
         document.getElementById("stat-area").innerText = Number(data.total_area).toLocaleString() + " م٢";
-        document.getElementById("stat-paid").innerText = Number(data.total_paid).toLocaleString() + " ج.م";
-        document.getElementById("stat-expenses").innerText = Number(data.total_expenses).toLocaleString() + " ج.م";
+        document.getElementById("stat-disk-files").innerText = `${data.disk_files_count || 0} ملف في المستودع`;
 
         const topTbody = document.getElementById("top-materials-tbody");
         topTbody.innerHTML = "";
@@ -537,7 +540,7 @@ async function loadDashboardStats() {
                 <td>${inv.invoice_date}</td>
                 <td><b>${inv.client_name}</b></td>
                 <td>${inv.total_pieces} طاولات (${inv.total_area} م٢)</td>
-                <td><b>${Number(inv.net_amount).toLocaleString()} ج.م</b></td>
+                <td><b>${Number(inv.total_amount).toLocaleString()} ج.م</b></td>
                 <td>
                     <button class="btn btn-outline" style="padding:4px 8px; font-size:0.8rem;" onclick="viewInvoiceDetail(${inv.id})">✏️ تعديل / عرض</button>
                     <a href="/api/invoices/${inv.id}/export-excel" class="btn btn-success" style="padding:4px 8px; font-size:0.8rem;">📥 إكسيل</a>
@@ -569,11 +572,7 @@ async function loadInvoicesArchive() {
                 <td>${inv.driver_name || '-'} / ${inv.car_no || '-'}</td>
                 <td>${inv.total_pieces}</td>
                 <td>${inv.total_area} م٢</td>
-                <td><b>${Number(inv.net_amount).toLocaleString()} ج.م</b></td>
-                <td>${Number(inv.paid_amount).toLocaleString()} ج.م</td>
-                <td style="color:${inv.remaining_amount > 0 ? '#b91c1c':'#15803d'}; font-weight:700;">
-                    ${Number(inv.remaining_amount).toLocaleString()} ج.م
-                </td>
+                <td><b>${Number(inv.total_amount).toLocaleString()} ج.م</b></td>
                 <td>
                     <div style="display:flex; gap:0.3rem;">
                         <button class="btn btn-outline" style="padding:4px 8px; font-size:0.8rem;" onclick="viewInvoiceDetail(${inv.id})">✏️ تعديل / عرض</button>
@@ -624,7 +623,6 @@ async function viewInvoiceDetail(id) {
         });
         recalculateAll();
 
-        // Render attachments gallery
         const attGallery = document.getElementById("invoice-attachments-gallery");
         attGallery.innerHTML = "";
         if (inv.attachments && inv.attachments.length > 0) {
@@ -664,7 +662,7 @@ async function viewInvoiceDetail(id) {
 }
 
 async function deleteInvoiceItem(id) {
-    if (confirm("هل أنت متأكد من حذف هذه الفاتورة تماماً من النظام؟")) {
+    if (confirm("هل أنت متأكد من حذف هذه الفاتورة؟")) {
         try {
             const res = await fetch(`/api/invoices/${id}`, {method: "DELETE"});
             if (res.ok) {
@@ -678,7 +676,7 @@ async function deleteInvoiceItem(id) {
     }
 }
 
-// ----------------- CLIENTS & LEDGERS -----------------
+// ----------------- CLIENTS (PROFILES & STANDALONE RECORDS) -----------------
 
 async function loadClients() {
     try {
@@ -703,7 +701,7 @@ async function loadClientsList() {
     const tbody = document.getElementById("clients-tbody");
     tbody.innerHTML = "";
     const select = document.getElementById("client-statement-select");
-    select.innerHTML = '<option value="">-- اختر عميل لعرض كشف الحساب --</option>';
+    select.innerHTML = '<option value="">-- اختر عميل لعرض فواتيره وشغله --</option>';
 
     clientsList.forEach(c => {
         const tr = document.createElement("tr");
@@ -711,22 +709,18 @@ async function loadClientsList() {
             <td><b>${c.name}</b></td>
             <td>${c.phone || '-'}</td>
             <td>${c.address || '-'}</td>
-            <td>${Number(c.opening_balance).toLocaleString()} ج.م</td>
-            <td>${Number(c.total_invoiced).toLocaleString()} ج.م</td>
-            <td>${Number(c.total_paid).toLocaleString()} ج.م</td>
-            <td style="color:${c.current_balance > 0 ? '#b91c1c':'#15803d'}; font-weight:800;">
-                ${Number(c.current_balance).toLocaleString()} ج.م
-            </td>
+            <td><span class="badge badge-blue">${c.invoices_count || 0} فواتير</span></td>
+            <td><b>${Number(c.total_invoiced || 0).toLocaleString()} ج.م</b></td>
+            <td>${c.total_pieces_count || 0} طاولات</td>
             <td>
-                <button class="btn btn-primary" style="padding:4px 8px; font-size:0.8rem;" onclick="showClientStatement('${c.name}')">📜 كشف حساب</button>
-                <button class="btn btn-success" style="padding:4px 8px; font-size:0.8rem;" onclick="openAddPaymentModal('${c.name}')">💰 تسجيل دفعة</button>
+                <button class="btn btn-primary" style="padding:4px 8px; font-size:0.8rem;" onclick="showClientStatement('${c.name}')">📜 عرض فواتير العميل</button>
             </td>
         `;
         tbody.appendChild(tr);
 
         const opt = document.createElement("option");
         opt.value = c.name;
-        opt.innerText = `${c.name} (رصيد: ${Number(c.current_balance).toLocaleString()} ج.م)`;
+        opt.innerText = `${c.name} (${c.invoices_count || 0} فواتير)`;
         select.appendChild(opt);
     });
 }
@@ -737,70 +731,33 @@ async function showClientStatement(clientName) {
         const res = await fetch(`/api/clients/${encodeURIComponent(clientName)}/statement`);
         const stmt = await res.json();
 
-        document.getElementById("stmt-client-title").innerText = `كشف حساب: ${stmt.client_name}`;
-        document.getElementById("stmt-debit").innerText = Number(stmt.total_debit).toLocaleString() + " ج.م";
-        document.getElementById("stmt-credit").innerText = Number(stmt.total_credit).toLocaleString() + " ج.م";
-        document.getElementById("stmt-balance").innerText = Number(stmt.final_balance).toLocaleString() + " ج.م";
-
+        document.getElementById("stmt-client-title").innerText = `سجل فواتير وشغل: ${stmt.client_name}`;
         const tbody = document.getElementById("stmt-tbody");
         tbody.innerHTML = "";
 
-        stmt.entries.forEach(e => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td>${e.date}</td>
-                <td><span class="badge ${e.type === 'فاتورة' ? 'badge-blue':'badge-green'}">${e.type}</span></td>
-                <td><b>${e.doc_no}</b></td>
-                <td>${e.description}</td>
-                <td style="color:#b91c1c; font-weight:700;">${e.debit > 0 ? Number(e.debit).toLocaleString():'-'}</td>
-                <td style="color:#15803d; font-weight:700;">${e.credit > 0 ? Number(e.credit).toLocaleString():'-'}</td>
-                <td style="font-weight:800;">${Number(e.balance).toLocaleString()} ج.م</td>
-            `;
-            tbody.appendChild(tr);
-        });
+        if (stmt.invoices && stmt.invoices.length > 0) {
+            stmt.invoices.forEach(inv => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${inv.invoice_date}</td>
+                    <td><b>${inv.invoice_no}</b></td>
+                    <td>${inv.total_pieces} قطعة (${inv.total_area} م٢)</td>
+                    <td><b>${Number(inv.net_amount).toLocaleString()} ج.م</b></td>
+                    <td>${inv.notes || '-'}</td>
+                    <td>
+                        <button class="btn btn-outline" style="padding:2px 8px; font-size:0.8rem;" onclick="closeModals(); viewInvoiceDetail(${inv.id})">✏️ تعديل / عرض</button>
+                        <a href="/api/invoices/${inv.id}/export-excel" class="btn btn-success" style="padding:2px 8px; font-size:0.8rem;">📥 إكسيل</a>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">لا توجد فواتير مسجلة لهذا العميل بعد.</td></tr>`;
+        }
 
         document.getElementById("client-statement-modal").style.display = "flex";
     } catch (e) {
-        alert("فشل تحميل كشف الحساب: " + e.message);
-    }
-}
-
-function openAddPaymentModal(clientName) {
-    document.getElementById("pay-client-name").value = clientName || "";
-    document.getElementById("pay-date").value = new Date().toISOString().split("T")[0];
-    document.getElementById("payment-modal").style.display = "flex";
-}
-
-async function submitPayment() {
-    const payload = {
-        client_name: document.getElementById("pay-client-name").value.trim(),
-        payment_date: document.getElementById("pay-date").value,
-        amount: parseFloat(document.getElementById("pay-amount").value) || 0,
-        currency: document.getElementById("pay-currency").value,
-        exchange_rate: parseFloat(document.getElementById("pay-rate").value) || 1,
-        payment_method: document.getElementById("pay-method").value,
-        notes: document.getElementById("pay-notes").value.trim()
-    };
-
-    if (!payload.client_name || payload.amount <= 0) {
-        alert("يرجى ملء اسم العميل والمبلغ!");
-        return;
-    }
-
-    try {
-        const res = await fetch("/api/payments", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-            alert("✅ تم تسجيل الدفعة بنجاح");
-            closeModals();
-            loadClientsList();
-            loadDashboardStats();
-        }
-    } catch (e) {
-        alert(e.message);
+        alert("فشل تحميل الفواتير: " + e.message);
     }
 }
 
@@ -893,7 +850,6 @@ async function loadRepository() {
         document.getElementById("repo-total-files").innerText = `${data.total_files || 0} ملف`;
         document.getElementById("repo-total-folders").innerText = `${data.folders_count || 0} مجلد`;
 
-        // Render folder tabs / pills
         const folderContainer = document.getElementById("repo-folder-pills");
         folderContainer.innerHTML = "";
 
@@ -927,7 +883,6 @@ function renderRepoFiles(files) {
     tbody.innerHTML = "";
 
     const search = document.getElementById("repo-search-input").value.trim().toLowerCase();
-
     const filtered = files.filter(f => !search || f.name.toLowerCase().includes(search));
 
     filtered.forEach(f => {
