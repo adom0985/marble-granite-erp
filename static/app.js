@@ -274,7 +274,7 @@ function recalculateAll() {
 
 // ----------------- SAVE OR UPDATE INVOICE (تعديل وحفظ مباشر في فولدر العميل) -----------------
 
-async function saveCurrentInvoice() {
+async function saveCurrentInvoice(silent = false) {
     const invNo = document.getElementById("meta-inv-no").value.trim();
     const invDate = document.getElementById("meta-inv-date").value.trim();
     const client = document.getElementById("meta-client-name").value.trim();
@@ -366,7 +366,9 @@ async function saveCurrentInvoice() {
             if (data.saved_to_disk) {
                 diskMsg = `\n📁 تم حفظ ملف الإكسيل تلقائياً في فولدر العميل على جهازك:\n${data.saved_to_disk}`;
             }
-            alert(`✅ ${actionMsg}${diskMsg}`);
+            if (!silent) {
+                alert(`✅ ${actionMsg}${diskMsg}`);
+            }
 
             loadDashboardStats();
             loadInvoicesArchive();
@@ -396,24 +398,42 @@ async function shareInvoiceWhatsApp() {
     }
 }
 
-function exportCurrentInvoiceExcel() {
+async function exportCurrentInvoiceExcel() {
+    const saveBtn = document.getElementById("btn-export-excel-current");
+    const origText = saveBtn ? saveBtn.innerHTML : "";
+    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحديث والتصدير...';
+    try {
+        await saveCurrentInvoice(true); // حفظ تلقائي فوري لأي تعديلات قبل التصدير
+    } catch(e) {}
+    if (saveBtn) saveBtn.innerHTML = origText;
+
     if (!currentViewingInvoiceId) {
         alert("يرجى حفظ الفاتورة أولاً!");
         return;
     }
     const token = localStorage.getItem("erp_token") || "";
-    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
-    window.location.href = `/api/invoices/${currentViewingInvoiceId}/export-excel${tokenParam}`;
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
+    const cacheBuster = `_t=${Date.now()}`;
+    window.location.href = `/api/invoices/${currentViewingInvoiceId}/export-excel?${cacheBuster}${tokenParam}`;
 }
 
-function exportCurrentInvoicePDF() {
+async function exportCurrentInvoicePDF() {
+    const saveBtn = document.getElementById("btn-export-pdf-current");
+    const origText = saveBtn ? saveBtn.innerHTML : "";
+    if (saveBtn) saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحديث والتصدير...';
+    try {
+        await saveCurrentInvoice(true); // حفظ تلقائي فوري لأي تعديلات قبل التصدير
+    } catch(e) {}
+    if (saveBtn) saveBtn.innerHTML = origText;
+
     if (!currentViewingInvoiceId) {
         alert("يرجى حفظ الفاتورة أولاً!");
         return;
     }
     const token = localStorage.getItem("erp_token") || "";
-    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
-    window.open(`/api/invoices/${currentViewingInvoiceId}/export-pdf${tokenParam}`, "_blank");
+    const tokenParam = token ? `&token=${encodeURIComponent(token)}` : "";
+    const cacheBuster = `_t=${Date.now()}`;
+    window.open(`/api/invoices/${currentViewingInvoiceId}/export-pdf?${cacheBuster}${tokenParam}`, "_blank");
 }
 
 // ----------------- ATTACHMENTS & PHOTOS -----------------

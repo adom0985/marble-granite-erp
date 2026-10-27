@@ -199,12 +199,15 @@ def save_invoice_to_client_folder(invoice_dict):
 
     inv_date = str(invoice_dict.get("invoice_date", datetime.now().strftime("%Y-%m-%d")))
     inv_no = str(invoice_dict.get("invoice_no", "INV"))
-    safe_file_name = f"{inv_date} - {inv_no}.xlsx".replace(":", "-").replace("/", "-")
-    target_path = os.path.join(target_folder, safe_file_name)
+    clean_no = re.sub(r'[\s/\\:*?"<>|]+', '-', inv_no).strip('-')
+    safe_base = f"{inv_date} - {clean_no}"
+    target_excel = os.path.join(target_folder, f"{safe_base}.xlsx")
+    target_pdf = os.path.join(target_folder, f"{safe_base}.pdf")
 
     try:
-        create_invoice_excel(invoice_dict, target_path)
-        return target_path
+        create_invoice_excel(invoice_dict, target_excel)
+        generate_invoice_pdf(invoice_dict, target_pdf)
+        return target_excel
     except Exception as e:
         print(f"Error auto-saving invoice to client folder: {e}")
         return None
@@ -758,14 +761,25 @@ def export_invoice_excel(invoice_id: int):
     invoice_dict["items"] = [dict(row) for row in c.fetchall()]
     conn.close()
 
-    filename = f"Invoice_{invoice_dict['invoice_no']}_{invoice_dict['invoice_date']}.xlsx"
+    clean_no = re.sub(r'[\s/\\:*?"<>|]+', '_', invoice_dict['invoice_no']).strip('_')
+    filename = f"Invoice_{clean_no}_{invoice_dict['invoice_date']}.xlsx"
     out_file = os.path.join(EXPORTS_DIR, filename)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
     create_invoice_excel(invoice_dict, out_file)
 
-    return FileResponse(out_file, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    encoded_filename = urllib.parse.quote(f"فاتورة_{clean_no}.xlsx")
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    return FileResponse(out_file, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers=headers)
 
 @app.get("/api/invoices/{invoice_id}/export-pdf")
 @app.get("/invoices/{invoice_id}/export-pdf")
+@app.get("/api/invoices/{invoice_id}/pdf")
+@app.get("/invoices/{invoice_id}/pdf")
 def export_invoice_pdf_endpoint(invoice_id: int):
     conn = get_connection()
     c = conn.cursor()
@@ -788,7 +802,10 @@ def export_invoice_pdf_endpoint(invoice_id: int):
 
     encoded_filename = urllib.parse.quote(f"فاتورة_{clean_no}.pdf")
     headers = {
-        "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"
+        "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0"
     }
     return FileResponse(out_file, media_type="application/pdf", headers=headers)
 
