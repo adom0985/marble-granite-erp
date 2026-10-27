@@ -343,6 +343,9 @@
                         <button type="button" id="btn-export-excel-current" class="btn btn-success" style="display:none;" onclick="exportCurrentInvoiceExcel()">
                             <i class="fa-solid fa-file-excel"></i> 📥 تصدير إكسيل
                         </button>
+                        <button type="button" id="btn-export-pdf-current" class="btn btn-danger" style="display:none; background:#dc2626; color:#fff;" onclick="exportCurrentInvoicePDF()">
+                            <i class="fa-solid fa-file-pdf"></i> 📄 تصدير PDF منسق
+                        </button>
                         <button type="button" class="btn btn-outline" onclick="window.print()">
                             <i class="fa-solid fa-print"></i> طباعة A4
                         </button>
@@ -472,11 +475,7 @@
                     <div id="invoice-attachments-gallery"></div>
                 </div>
 
-                <div style="margin-top:2.5rem; display:flex; justify-content:space-around; font-weight:800; text-align:center;">
-                    <div>توقيع المستلم: ....................</div>
-                    <div>سائق السيارة: ....................</div>
-                    <div>المشرف / الحسابات: ....................</div>
-                </div>
+<!-- Signatures omitted as requested -->
             </div>
 
         </section>

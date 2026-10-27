@@ -8,3 +8,7 @@ venv/
 .DS_Store
 exports/test*.xlsx
 cloudflared.exe
+
+exports/*
+static/exports/*
+

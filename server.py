@@ -13,6 +13,7 @@ import fitz
 
 from database import get_connection, init_db
 from excel_exporter import create_invoice_excel
+from pdf_invoice_generator import generate_invoice_pdf
 from auth import authenticate_user, create_auth_token, verify_auth_token, extract_token_from_request
 
 app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="6.0")
@@ -753,6 +754,34 @@ def export_invoice_excel(invoice_id: int):
     create_invoice_excel(invoice_dict, out_file)
 
     return FileResponse(out_file, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+@app.get("/api/invoices/{invoice_id}/export-pdf")
+@app.get("/invoices/{invoice_id}/export-pdf")
+def export_invoice_pdf_endpoint(invoice_id: int):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM invoices WHERE id = ?", (invoice_id,))
+    inv = c.fetchone()
+    if not inv:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice_dict = dict(inv)
+
+    c.execute("SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY row_index ASC", (invoice_id,))
+    invoice_dict["items"] = [dict(row) for row in c.fetchall()]
+    conn.close()
+
+    clean_no = re.sub(r'[\s/\\:*?"<>|]+', '_', invoice_dict['invoice_no']).strip('_')
+    filename = f"Invoice_{clean_no}_{invoice_dict['invoice_date']}.pdf"
+    out_file = os.path.join(EXPORTS_DIR, filename)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
+    generate_invoice_pdf(invoice_dict, out_file)
+
+    encoded_filename = urllib.parse.quote(f"فاتورة_{clean_no}.pdf")
+    headers = {
+        "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"
+    }
+    return FileResponse(out_file, media_type="application/pdf", headers=headers)
 
 @app.get("/api/invoices/{invoice_id}/whatsapp-link")
 def get_whatsapp_link(invoice_id: int, phone: Optional[str] = None):
