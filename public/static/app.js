@@ -768,8 +768,17 @@ async function showClientStatement(clientName) {
         const res = await fetch(`/api/clients/${encodeURIComponent(clientName)}/statement`);
         const stmt = await res.json();
 
-        document.getElementById("stmt-client-title").innerText = `سجل فواتير وشغل: ${stmt.client_name}`;
+        document.getElementById("stmt-client-title").innerText = `كشف حساب وسجل حركات: ${stmt.client_name}`;
         
+        // Update summary cards (Debit, Credit, Net Remaining)
+        const debitEl = document.getElementById("stmt-debit");
+        const creditEl = document.getElementById("stmt-credit");
+        const balanceEl = document.getElementById("stmt-balance");
+
+        if (debitEl) debitEl.innerText = `${Number(stmt.total_active_invoices || 0).toLocaleString()} ج.م`;
+        if (creditEl) creditEl.innerText = `${Number(stmt.total_payments || 0).toLocaleString()} ج.م`;
+        if (balanceEl) balanceEl.innerText = `${Number(stmt.net_remaining || 0).toLocaleString()} ج.م`;
+
         const specialBtn = document.getElementById("stmt-download-special-btn");
         if (specialBtn) {
             if (["الحاج صلاح", "أحمد رضا", "أدهم", "صديق جعفر"].includes(stmt.client_name)) {
@@ -780,32 +789,78 @@ async function showClientStatement(clientName) {
             }
         }
 
+        // Build chronological combined ledger (7 columns)
+        const ledger = [];
+        const invoices = (stmt.active_invoices && stmt.active_invoices.length > 0) ? stmt.active_invoices : (stmt.invoices || []);
+        
+        invoices.forEach(inv => {
+            ledger.push({
+                type: 'invoice',
+                date: inv.invoice_date || '',
+                doc_no: inv.invoice_no,
+                details: `${inv.total_pieces || 0} ق (${inv.total_area || 0} م٢)${inv.notes ? ' - ' + inv.notes : ''}`,
+                debit: Number(inv.net_amount || 0),
+                credit: 0,
+                id: inv.id
+            });
+        });
+
+        (stmt.payments || []).forEach(p => {
+            ledger.push({
+                type: 'payment',
+                date: p.payment_date || '',
+                doc_no: `إيصال دفع ${p.id || ''}`,
+                details: `واصل منه (${p.payment_method || 'نقداً'})${p.notes ? ' - ' + p.notes : ''}`,
+                debit: 0,
+                credit: Number(p.amount_egp || p.amount || 0),
+                id: p.id
+            });
+        });
+
+        // Sort by date
+        ledger.sort((a, b) => (a.date > b.date ? 1 : -1));
+
+        let runningBalance = 0;
         const tbody = document.getElementById("stmt-tbody");
         tbody.innerHTML = "";
 
-        if (stmt.invoices && stmt.invoices.length > 0) {
-            stmt.invoices.forEach(inv => {
+        if (ledger.length > 0) {
+            ledger.forEach(item => {
+                runningBalance += (item.debit - item.credit);
                 const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td>${inv.invoice_date}</td>
-                    <td><b>${inv.invoice_no}</b></td>
-                    <td>${inv.total_pieces} قطعة (${inv.total_area} م٢)</td>
-                    <td><b>${Number(inv.net_amount).toLocaleString()} ج.م</b></td>
-                    <td>${inv.notes || '-'}</td>
-                    <td>
-                        <button class="btn btn-outline" style="padding:2px 8px; font-size:0.8rem;" onclick="closeModals(); viewInvoiceDetail(${inv.id})">✏️ تعديل / عرض</button>
-                        <a href="/api/invoices/${inv.id}/export-excel" class="btn btn-success" style="padding:2px 8px; font-size:0.8rem;">📥 إكسيل</a>
-                    </td>
-                `;
+                const token = localStorage.getItem("erp_token") || "";
+                const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+
+                if (item.type === 'invoice') {
+                    tr.innerHTML = `
+                        <td>${item.date}</td>
+                        <td><span class="badge badge-blue">فاتورة توريد</span></td>
+                        <td><b>${item.doc_no}</b></td>
+                        <td>${item.details}</td>
+                        <td style="color:#b91c1c; font-weight:800;">${item.debit.toLocaleString()} ج.م</td>
+                        <td style="color:#64748b;">-</td>
+                        <td style="font-weight:900; color:#1e3a8a;">${runningBalance.toLocaleString()} ج.م</td>
+                    `;
+                } else {
+                    tr.innerHTML = `
+                        <td>${item.date}</td>
+                        <td><span class="badge badge-green" style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:4px; font-weight:700;">دفعة مسددة</span></td>
+                        <td><b>${item.doc_no}</b></td>
+                        <td>${item.details}</td>
+                        <td style="color:#64748b;">-</td>
+                        <td style="color:#15803d; font-weight:800;">${item.credit.toLocaleString()} ج.م</td>
+                        <td style="font-weight:900; color:#1e3a8a;">${runningBalance.toLocaleString()} ج.م</td>
+                    `;
+                }
                 tbody.appendChild(tr);
             });
         } else {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:15px; color:#64748b;">لا توجد فواتير مسجلة لهذا العميل بعد.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:15px; color:#64748b;">لا توجد حركات مسجلة لهذا العميل بعد.</td></tr>`;
         }
 
         document.getElementById("client-statement-modal").style.display = "flex";
     } catch (e) {
-        alert("فشل تحميل الفواتير: " + e.message);
+        alert("فشل تحميل كشف الحساب: " + e.message);
     }
 }
 
