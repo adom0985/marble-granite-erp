@@ -38,6 +38,49 @@
 </head>
 <body>
 
+    <!-- ================= FULLSCREEN SECURITY LOCK SCREEN ================= -->
+    <div id="login-overlay" style="display:flex; position:fixed; top:0; left:0; width:100vw; height:100vh; background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%); z-index:999999; justify-content:center; align-items:center; padding:1.25rem; font-family:'Cairo', sans-serif;">
+        <div style="background:#ffffff; border-radius:18px; padding:2.5rem 2rem; width:100%; max-width:430px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.6); text-align:center;">
+            <div style="background:#eff6ff; width:75px; height:75px; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1.25rem auto;">
+                <i class="fa-solid fa-shield-halved" style="font-size:2.2rem; color:#2563eb;"></i>
+            </div>
+            <h2 style="font-size:1.45rem; font-weight:900; color:#1e293b; margin:0 0 0.5rem 0;">منظومة الرخام والجرانيت</h2>
+            <p style="font-size:0.88rem; color:#64748b; margin:0 0 1.5rem 0; font-weight:600;">منطقة محمية ومشفرة - يتطلب تسجيل الدخول</p>
+
+            <form id="login-form" onsubmit="handleLoginSubmit(event)" style="text-align:right;">
+                <div style="margin-bottom:1.2rem;">
+                    <label style="display:block; font-size:0.85rem; font-weight:700; color:#334155; margin-bottom:6px;">
+                        <i class="fa-solid fa-user" style="color:#2563eb; margin-left:4px;"></i> اسم المستخدم
+                    </label>
+                    <input type="text" id="login-username" class="form-control" placeholder="اسم المستخدم (admin)" required autocomplete="username" style="width:100%; padding:10px 12px; font-size:0.95rem; border:1px solid #cbd5e1; border-radius:8px;">
+                </div>
+
+                <div style="margin-bottom:1.2rem;">
+                    <label style="display:block; font-size:0.85rem; font-weight:700; color:#334155; margin-bottom:6px;">
+                        <i class="fa-solid fa-lock" style="color:#2563eb; margin-left:4px;"></i> كلمة المرور
+                    </label>
+                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password" style="width:100%; padding:10px 12px; font-size:0.95rem; border:1px solid #cbd5e1; border-radius:8px;">
+                </div>
+
+                <div id="login-error-msg" style="display:none; background:#fee2e2; color:#b91c1c; padding:8px 12px; border-radius:6px; font-size:0.85rem; font-weight:700; margin-bottom:1.2rem; text-align:center;">
+                    اسم المستخدم أو كلمة المرور غير صحيحة!
+                </div>
+
+                <button type="submit" id="login-submit-btn" class="btn btn-primary" style="width:100%; padding:12px; font-size:1rem; font-weight:800; border-radius:8px; display:flex; justify-content:center; align-items:center; gap:8px;">
+                    <i class="fa-solid fa-right-to-bracket"></i> دخول آمن إلى النظام
+                </button>
+            </form>
+
+            <div style="margin-top:1.5rem; font-size:0.75rem; color:#94a3b8; font-weight:600; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <i class="fa-solid fa-lock"></i> نظام التحقق السحابي المشفر 2026
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MAIN APP WRAPPER (LOCKED UNTIL LOGIN) ================= -->
+    <div id="app-wrapper" style="display:none;">
+
+
     <!-- Datalists for Autocomplete -->
     <datalist id="materials-datalist"></datalist>
     <datalist id="clients-datalist"></datalist>
@@ -76,6 +119,14 @@
                     <i class="fa-solid fa-industry"></i> مصانع النشر والتلميع
                 </button>
             </nav>
+            <div style="display:flex; align-items:center; gap:0.75rem; margin-right:auto;">
+                <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; padding:5px 12px; border-radius:12px; font-size:0.82rem;">
+                    <i class="fa-solid fa-user-shield"></i> <span id="nav-username">admin</span>
+                </span>
+                <button class="btn btn-outline" onclick="handleLogout()" style="background:#fee2e2; color:#991b1b; border:1px solid #f87171; font-size:0.82rem; font-weight:800; padding:5px 12px; border-radius:8px; cursor:pointer;" title="تسجيل الخروج الآمن (مهم لو في سايبر أو جهاز مشترك)">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i> خروج آمن
+                </button>
+            </div>
         </div>
     </header>
 
@@ -1058,6 +1109,7 @@
         </div>
     </div>
 
+    </div> <!-- End app-wrapper -->
     <script src="/static/app.js"></script>
 </body>
 </html>

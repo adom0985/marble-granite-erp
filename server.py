@@ -13,14 +13,34 @@ import fitz
 
 from database import get_connection, init_db
 from excel_exporter import create_invoice_excel
+from auth import authenticate_user, create_auth_token, verify_auth_token, extract_token_from_request
 
 app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="6.0")
 
 @app.middleware("http")
-async def api_prefix_middleware(request: Request, call_next):
+async def security_and_routing_middleware(request: Request, call_next):
     p = request.scope.get("path", "")
+    
+    # 1. API rewrite if needed
     if p != "/" and not p.startswith("/static") and not p.startswith("/uploads") and not p.startswith("/api/"):
-        request.scope["path"] = "/api" + p
+        p = "/api" + p
+        request.scope["path"] = p
+
+    # 2. Public paths that do NOT require authentication
+    public_exact = ["/", "/api/auth/login", "/auth/login", "/favicon.ico"]
+    if p in public_exact or p.startswith("/static/"):
+        return await call_next(request)
+
+    # 3. Security guard: check token for EVERY other endpoint
+    token = extract_token_from_request(request)
+    user_payload = verify_auth_token(token)
+    if not user_payload:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "غير مصرح - يرجى تسجيل الدخول أولاً", "auth_required": True}
+        )
+
+    request.state.user = user_payload
     return await call_next(request)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -175,6 +195,46 @@ def save_invoice_to_client_folder(invoice_dict):
     except Exception as e:
         print(f"Error auto-saving invoice to client folder: {e}")
         return None
+
+# ----------------- AUTHENTICATION ENDPOINTS (نظام الدخول الآمن والحماية) -----------------
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/login")
+@app.post("/auth/login")
+def login_endpoint(data: LoginRequest):
+    user = authenticate_user(data.username, data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="اسم المستخدم أو كلمة المرور غير صحيحة")
+    token = create_auth_token(user)
+    resp = JSONResponse(content={"status": "success", "token": token, "username": user})
+    resp.set_cookie(
+        key="auth_token",
+        value=token,
+        max_age=2592000,
+        httponly=False,
+        samesite="lax",
+        secure=IS_VERCEL
+    )
+    return resp
+
+@app.get("/api/auth/me")
+@app.get("/auth/me")
+def check_auth(request: Request):
+    token = extract_token_from_request(request)
+    payload = verify_auth_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="غير مصرح")
+    return {"status": "authenticated", "username": payload["sub"]}
+
+@app.post("/api/auth/logout")
+@app.post("/auth/logout")
+def logout_endpoint():
+    resp = JSONResponse(content={"status": "logged_out"})
+    resp.delete_cookie(key="auth_token", path="/")
+    return resp
 
 # ----------------- REPOSITORY ENDPOINTS (مستودع الملفات والشغل) -----------------
 

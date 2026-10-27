@@ -1,375 +1,34 @@
-// Smart API routing for Vercel vs Local
-if (typeof window !== "undefined" && window.location && window.location.hostname.includes("vercel.app")) {
+// Smart API routing & Universal Authentication Interceptor
+(function() {
     const originalFetch = window.fetch;
-    window.fetch = function(url, options) {
-        if (typeof url === "string" && url.startsWith("/api/")) {
-            url = url.substring(4);
+    window.fetch = function(url, options = {}) {
+        options = options || {};
+        options.headers = options.headers || {};
+
+        if (typeof window !== "undefined" && window.location && window.location.hostname.includes("vercel.app")) {
+            if (typeof url === "string" && url.startsWith("/api/")) {
+                url = url.substring(4);
+            }
         }
-        return originalFetch(url, options);
-    };
-}
 
-// Global state
-let materialsList = [];
-let clientsList = [];
-let currentViewingInvoiceId = null;
-let repoTreeData = [];
-let selectedRepoFolder = null;
+        const token = localStorage.getItem("erp_token");
+        if (token) {
+            if (options.headers instanceof Headers) {
+                options.headers.set("Authorization", "Bearer " + token);
+            } else {
+                options.headers["Authorization"] = "Bearer " + token;
+            }
+        }
 
-document.addEventListener("DOMContentLoaded", () => {
-    initTabs();
-    loadDashboardStats();
-    loadMaterials();
-    loadClients();
-    setupInitialInvoiceRows();
-    loadInvoicesArchive();
-    loadPartnersSummary();
-    loadFactories();
-    loadRepository();
-});
-
-// Tab Navigation
-function initTabs() {
-    const tabs = document.querySelectorAll(".nav-tab-btn");
-    tabs.forEach(tab => {
-        tab.addEventListener("click", () => {
-            tabs.forEach(t => t.classList.remove("active"));
-            tab.classList.add("active");
-            const targetId = tab.getAttribute("data-tab");
-            document.querySelectorAll(".tab-pane").forEach(pane => {
-                pane.style.display = pane.id === targetId ? "block" : "none";
-            });
-
-            if (targetId === "dashboard-pane") loadDashboardStats();
-            if (targetId === "archive-pane") loadInvoicesArchive();
-            if (targetId === "clients-pane") loadClientsList();
-            if (targetId === "prices-pane") renderPricesTab();
-            if (targetId === "partners-pane") loadPartnersSummary();
-            if (targetId === "factories-pane") loadFactories();
-            if (targetId === "repository-pane") loadRepository();
+        return originalFetch(url, options).then(response => {
+            if (response.status === 401 && typeof url === "string" && !url.includes("/auth/login")) {
+                handleLogout(false);
+            }
+            return response;
         });
-    });
-}
-
-// ----------------- INVOICE BUILDER & EDITING -----------------
-
-function setupInitialInvoiceRows(count = 7) {
-    const tbody = document.getElementById("invoice-items-tbody");
-    tbody.innerHTML = "";
-    currentViewingInvoiceId = null;
-    
-    const saveBtn = document.getElementById("btn-save-invoice");
-    if (saveBtn) {
-        saveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> حفظ الفاتورة في النظام والفولدر';
-        saveBtn.className = "btn btn-success";
-    }
-
-    const dateInput = document.getElementById("meta-inv-date");
-    if (!dateInput.value) {
-        dateInput.value = new Date().toISOString().split("T")[0];
-    }
-    const invNoInput = document.getElementById("meta-inv-no");
-    if (!invNoInput.value) {
-        const rnd = Math.floor(100 + Math.random() * 900);
-        invNoInput.value = `INV-${new Date().getFullYear()}-${rnd}`;
-    }
-
-    document.getElementById("btn-send-whatsapp").style.display = "none";
-    document.getElementById("btn-attach-photos").style.display = "none";
-    document.getElementById("btn-export-excel-current").style.display = "none";
-
-    for (let i = 0; i < count; i++) {
-        addRowToInvoice();
-    }
-    recalculateAll();
-}
-
-function addRowToInvoice(itemData = null) {
-    const tbody = document.getElementById("invoice-items-tbody");
-    const tr = document.createElement("tr");
-
-    const pkg = itemData ? (itemData.package_no || "") : "";
-    const blk = itemData ? (itemData.block_no || "") : "";
-    const mat = itemData ? (itemData.material_name || "") : "";
-    const qty = itemData ? (itemData.qty || "") : "";
-    const len = itemData ? (itemData.length || "") : "";
-    const wid = itemData ? (itemData.width || "") : "";
-    const area = itemData ? (itemData.area || 0) : 0;
-    const isFree = itemData ? Boolean(itemData.is_free) : false;
-    const prc = isFree ? 0 : (itemData ? (itemData.price || "") : "");
-    const tot = isFree ? 0 : (itemData ? (itemData.total || 0) : 0);
-    const nts = itemData ? (itemData.notes || "") : "";
-
-    tr.className = isFree ? "free-row" : "";
-    tr.innerHTML = `
-        <td><input type="text" class="grid-input col-pkg" value="${pkg}"></td>
-        <td><input type="text" class="grid-input col-blk" value="${blk}"></td>
-        <td>
-            <input type="text" list="materials-datalist" class="grid-input col-mat" value="${mat}" placeholder="اختر الخامة...">
-        </td>
-        <td><input type="number" step="any" class="grid-input col-qty" value="${qty}" oninput="onCellChange(this)"></td>
-        <td><input type="number" step="any" class="grid-input col-len" value="${len}" oninput="onCellChange(this)"></td>
-        <td><input type="number" step="any" class="grid-input col-wid" value="${wid}" oninput="onCellChange(this)"></td>
-        <td><input type="number" step="any" class="grid-input col-area readonly-val" value="${area}" readonly></td>
-        <td><input type="number" step="any" class="grid-input col-prc" value="${prc}" ${isFree ? 'readonly style="background:#fef08a;"' : ''} oninput="onCellChange(this)"></td>
-        <td><input type="number" step="any" class="grid-input col-tot readonly-val" value="${tot}" readonly></td>
-        <td style="text-align:center;">
-            <label style="font-size:0.75rem; font-weight:800; cursor:pointer; color:#b45309; display:inline-flex; align-items:center; gap:2px;">
-                <input type="checkbox" class="col-free" ${isFree ? "checked" : ""} onchange="onToggleFree(this)"> فري
-            </label>
-        </td>
-        <td><input type="text" class="grid-input col-notes" value="${nts}"></td>
-        <td class="no-print"><button type="button" class="btn btn-danger" style="padding:2px 8px; font-size:0.8rem;" onclick="removeInvoiceRow(this)">✕</button></td>
-    `;
-
-    tbody.appendChild(tr);
-
-    const matInput = tr.querySelector(".col-mat");
-    matInput.addEventListener("change", () => {
-        const selected = materialsList.find(m => m.name === matInput.value);
-        if (selected && selected.default_price) {
-            const prcInput = tr.querySelector(".col-prc");
-            const freeBox = tr.querySelector(".col-free");
-            if (!freeBox.checked && !prcInput.value) {
-                prcInput.value = selected.default_price;
-                onCellChange(prcInput);
-            }
-        }
-    });
-}
-
-function onToggleFree(chk) {
-    const tr = chk.closest("tr");
-    const prcInput = tr.querySelector(".col-prc");
-    const notesInput = tr.querySelector(".col-notes");
-
-    if (chk.checked) {
-        tr.classList.add("free-row");
-        prcInput.value = 0;
-        prcInput.readOnly = true;
-        prcInput.style.backgroundColor = "#fef08a";
-        if (!notesInput.value.includes("فري")) {
-            notesInput.value = ("فري (مجاني) " + notesInput.value).trim();
-        }
-    } else {
-        tr.classList.remove("free-row");
-        prcInput.readOnly = false;
-        prcInput.style.backgroundColor = "transparent";
-        notesInput.value = notesInput.value.replace("فري (مجاني)", "").replace("فري", "").trim();
-        const mat = tr.querySelector(".col-mat").value.trim();
-        const selected = materialsList.find(m => m.name === mat);
-        if (selected) prcInput.value = selected.default_price;
-    }
-    onCellChange(prcInput);
-}
-
-function removeInvoiceRow(btn) {
-    const tr = btn.closest("tr");
-    tr.remove();
-    recalculateAll();
-}
-
-function onCellChange(input) {
-    const tr = input.closest("tr");
-    const qty = parseFloat(tr.querySelector(".col-qty").value) || 0;
-    const len = parseFloat(tr.querySelector(".col-len").value) || 0;
-    const wid = parseFloat(tr.querySelector(".col-wid").value) || 0;
-    const isFree = tr.querySelector(".col-free").checked;
-    const prc = isFree ? 0 : (parseFloat(tr.querySelector(".col-prc").value) || 0);
-
-    let area = 0;
-    if (qty > 0 && len > 0 && wid > 0) {
-        area = parseFloat((qty * len * wid).toFixed(4));
-    }
-    tr.querySelector(".col-area").value = area > 0 ? area : "";
-
-    let total = 0;
-    if (area > 0 && prc > 0 && !isFree) {
-        total = parseFloat((area * prc).toFixed(2));
-    }
-    tr.querySelector(".col-tot").value = total > 0 ? total : 0;
-
-    recalculateAll();
-}
-
-function recalculateAll() {
-    const rows = document.querySelectorAll("#invoice-items-tbody tr");
-    let totalPieces = 0;
-    let totalArea = 0;
-    let totalAmount = 0;
-    let totalFreePieces = 0;
-
-    const truckMap = {};
-
-    rows.forEach(tr => {
-        const mat = tr.querySelector(".col-mat").value.trim();
-        const qty = parseFloat(tr.querySelector(".col-qty").value) || 0;
-        const wid = parseFloat(tr.querySelector(".col-wid").value) || 0;
-        const area = parseFloat(tr.querySelector(".col-area").value) || 0;
-        const isFree = tr.querySelector(".col-free") ? tr.querySelector(".col-free").checked : false;
-        const prc = isFree ? 0 : (parseFloat(tr.querySelector(".col-prc").value) || 0);
-        const tot = isFree ? 0 : (parseFloat(tr.querySelector(".col-tot").value) || 0);
-
-        if (qty > 0) totalPieces += qty;
-        if (area > 0) totalArea += area;
-        if (tot > 0) totalAmount += tot;
-        if (isFree && qty > 0) totalFreePieces += qty;
-
-        if (mat && qty > 0) {
-            const suffix = isFree ? " ( فري )" : (wid > 0 ? ` ( ${wid} )` : "");
-            const label = `${mat}${suffix}`;
-            if (!truckMap[label]) {
-                truckMap[label] = {
-                    label: label,
-                    qty: 0,
-                    area: 0,
-                    price: prc,
-                    is_free: isFree
-                };
-            }
-            truckMap[label].qty += qty;
-            truckMap[label].area += area;
-        }
-    });
-
-    document.getElementById("lbl-total-pieces").innerText = totalPieces + (totalFreePieces > 0 ? ` (${totalFreePieces} فري)` : '');
-    document.getElementById("lbl-total-area").innerText = totalArea.toFixed(3);
-    document.getElementById("lbl-total-amount").innerText = totalAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-    // Render truck summary table
-    const truckTbody = document.getElementById("truck-summary-tbody");
-    truckTbody.innerHTML = "";
-
-    let sTotQty = 0;
-    let sTotArea = 0;
-    let sTotAmount = 0;
-
-    Object.values(truckMap).forEach(item => {
-        const itemTot = item.is_free ? 0 : parseFloat((item.area * item.price).toFixed(2));
-        sTotQty += item.qty;
-        sTotArea += item.area;
-        sTotAmount += itemTot;
-
-        const tr = document.createElement("tr");
-        if (item.is_free) tr.style.backgroundColor = "#fef08a";
-        tr.innerHTML = `
-            <td>${item.label}</td>
-            <td>${item.qty}</td>
-            <td>${item.area.toFixed(3)}</td>
-            <td>${item.is_free ? '<span style="color:#b45309; font-weight:800;">فري (0)</span>' : item.price}</td>
-            <td>${item.is_free ? '0.00' : itemTot.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-        `;
-        truckTbody.appendChild(tr);
-    });
-
-    document.getElementById("sum-tot-qty").innerText = sTotQty;
-    document.getElementById("sum-tot-area").innerText = sTotArea.toFixed(3);
-    document.getElementById("sum-tot-amount").innerText = sTotAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-}
-
-// ----------------- SAVE OR UPDATE INVOICE (تعديل وحفظ مباشر في فولدر العميل) -----------------
-
-async function saveCurrentInvoice() {
-    const invNo = document.getElementById("meta-inv-no").value.trim();
-    const invDate = document.getElementById("meta-inv-date").value.trim();
-    const client = document.getElementById("meta-client-name").value.trim();
-
-    if (!invNo || !invDate || !client) {
-        alert("يرجى ملء البيانات الأساسية: رقم الفاتورة، التاريخ، واسم العميل!");
-        return;
-    }
-
-    const rows = document.querySelectorAll("#invoice-items-tbody tr");
-    const items = [];
-
-    rows.forEach(tr => {
-        const mat = tr.querySelector(".col-mat").value.trim();
-        const qty = parseFloat(tr.querySelector(".col-qty").value) || 0;
-        const len = parseFloat(tr.querySelector(".col-len").value) || 0;
-        const wid = parseFloat(tr.querySelector(".col-wid").value) || 0;
-        const area = parseFloat(tr.querySelector(".col-area").value) || 0;
-        const isFree = tr.querySelector(".col-free").checked;
-        const prc = isFree ? 0 : (parseFloat(tr.querySelector(".col-prc").value) || 0);
-        const tot = isFree ? 0 : (parseFloat(tr.querySelector(".col-tot").value) || 0);
-        const pkg = tr.querySelector(".col-pkg").value.trim();
-        const blk = tr.querySelector(".col-blk").value.trim();
-        const nts = tr.querySelector(".col-notes").value.trim();
-
-        if (mat && qty > 0) {
-            items.push({
-                package_no: pkg,
-                block_no: blk,
-                material_name: mat,
-                qty: qty,
-                length: len,
-                width: wid,
-                area: area,
-                price: prc,
-                total: tot,
-                is_free: isFree,
-                notes: nts
-            });
-        }
-    });
-
-    if (items.length === 0) {
-        alert("يرجى إضافة بند واحد على الأقل في الفاتورة!");
-        return;
-    }
-
-    const payload = {
-        invoice_no: invNo,
-        invoice_date: invDate,
-        client_name: client,
-        driver_name: document.getElementById("meta-driver-name").value.trim(),
-        car_no: document.getElementById("meta-car-no").value.trim(),
-        loading_place: document.getElementById("meta-loading-place").value.trim(),
-        supervisor: document.getElementById("meta-supervisor").value.trim(),
-        discount: parseFloat(document.getElementById("meta-discount").value) || 0,
-        paid_amount: parseFloat(document.getElementById("meta-paid").value) || 0,
-        notes: document.getElementById("meta-notes").value.trim(),
-        items: items
     };
+})();
 
-    const isEdit = Boolean(currentViewingInvoiceId);
-    const url = isEdit ? `/api/invoices/${currentViewingInvoiceId}` : "/api/invoices";
-    const method = isEdit ? "PUT" : "POST";
-
-    try {
-        const res = await fetch(url, {
-            method: method,
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (res.ok) {
-            currentViewingInvoiceId = data.invoice_id;
-            document.getElementById("btn-send-whatsapp").style.display = "inline-flex";
-            document.getElementById("btn-attach-photos").style.display = "inline-flex";
-            document.getElementById("btn-export-excel-current").style.display = "inline-flex";
-
-            const saveBtn = document.getElementById("btn-save-invoice");
-            saveBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> حفظ التعديلات على الفاتورة';
-            saveBtn.className = "btn btn-primary";
-
-            const actionMsg = isEdit ? "تم حفظ التعديلات بنجاح!" : `تم حفظ الفاتورة بنجاح برقم: ${data.invoice_no}`;
-            let diskMsg = "";
-            if (data.saved_to_disk) {
-                diskMsg = `\n📁 تم حفظ ملف الإكسيل تلقائياً في فولدر العميل على جهازك:\n${data.saved_to_disk}`;
-            }
-            alert(`✅ ${actionMsg}${diskMsg}`);
-
-            loadDashboardStats();
-            loadInvoicesArchive();
-            loadClientsList();
-            loadRepository();
-        } else {
-            alert("حدث خطأ أثناء الحفظ: " + (data.detail || ""));
-        }
-    } catch (e) {
-        alert("فشل الاتصال بالخادم: " + e.message);
-    }
-}
 
 // ----------------- WHATSAPP SHARING -----------------
 
@@ -1397,5 +1056,128 @@ function startNewInvoiceForClient(clientName) {
     const newInvBtn = document.querySelector('[data-tab="new-invoice-pane"]');
     if (newInvBtn) {
         newInvBtn.click();
+    }
+}
+
+
+// ----------------- AUTHENTICATION MANAGER & CYBER SAFE-MODE -----------------
+
+async function checkAuthAndInit() {
+    const token = localStorage.getItem("erp_token");
+    if (!token) {
+        showLoginScreen();
+        return;
+    }
+
+    try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+            const data = await res.json();
+            unlockApp(data.username || "admin");
+        } else {
+            handleLogout(false);
+        }
+    } catch (e) {
+        unlockApp("admin");
+    }
+}
+
+function showLoginScreen() {
+    const overlay = document.getElementById("login-overlay");
+    const appWrapper = document.getElementById("app-wrapper");
+    if (overlay) overlay.style.display = "flex";
+    if (appWrapper) appWrapper.style.display = "none";
+    const passInput = document.getElementById("login-password");
+    if (passInput) passInput.value = "";
+    const userErr = document.getElementById("login-error-msg");
+    if (userErr) userErr.style.display = "none";
+}
+
+function unlockApp(username = "admin") {
+    const overlay = document.getElementById("login-overlay");
+    const appWrapper = document.getElementById("app-wrapper");
+    if (overlay) overlay.style.display = "none";
+    if (appWrapper) appWrapper.style.display = "block";
+    const navUser = document.getElementById("nav-username");
+    if (navUser) navUser.innerText = username;
+
+    // Load initial ERP data now that user is verified!
+    initTabs();
+    loadDashboardStats();
+    loadMaterials();
+    loadClients();
+    setupInitialInvoiceRows();
+    loadInvoicesArchive();
+    loadPartnersSummary();
+    loadFactories();
+    loadRepository();
+}
+
+async function handleLoginSubmit(event) {
+    if (event) event.preventDefault();
+    const usernameInput = document.getElementById("login-username");
+    const passwordInput = document.getElementById("login-password");
+    const errDiv = document.getElementById("login-error-msg");
+    const submitBtn = document.getElementById("login-submit-btn");
+
+    const username = usernameInput ? usernameInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value.trim() : "";
+
+    if (!username || !password) {
+        if (errDiv) {
+            errDiv.innerText = "يرجى إدخال اسم المستخدم وكلمة المرور";
+            errDiv.style.display = "block";
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> جاري التحقق...`;
+    }
+
+    try {
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            localStorage.setItem("erp_token", data.token);
+            document.cookie = `auth_token=${data.token}; path=/; max-age=2592000; SameSite=Lax`;
+            unlockApp(data.username || username);
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            if (errDiv) {
+                errDiv.innerText = errData.detail || "اسم المستخدم أو كلمة المرور غير صحيحة!";
+                errDiv.style.display = "block";
+            }
+        }
+    } catch (e) {
+        if (errDiv) {
+            errDiv.innerText = "فشل الاتصال بالخادم: " + e.message;
+            errDiv.style.display = "block";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> دخول آمن إلى النظام`;
+        }
+    }
+}
+
+async function handleLogout(notify = true) {
+    localStorage.removeItem("erp_token");
+    sessionStorage.clear();
+    document.cookie = "auth_token=; path=/; max-age=0; SameSite=Lax";
+    try {
+        await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {}
+
+    showLoginScreen();
+    if (notify) {
+        alert("تم تسجيل الخروج بنجاح وإقفال المنظومة. يمكنك الآن ترك الجهاز بأمان.");
     }
 }
