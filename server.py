@@ -158,33 +158,28 @@ class ParseOrderTextModel(BaseModel):
     text: str
 
 def calculate_truck_summary(items):
-    """Generates the ملخص الجرار table automatically grouped by material + dimensions, separating free items"""
+    """Group truck summary by material, thickness and free/paid status (not width)."""
     agg = {}
     for it in items:
-        mat = it["material_name"]
-        w = it.get("width", 0)
+        material = str(it.get("material_name") or "").strip()
+        thickness = str(it.get("thickness") or "").strip()
+        if not thickness:
+            import re
+            match = re.search(r"\d+(?:[.,]\d+)?\s*(?:\u0633\u0645|\u0645\u0645|cm|mm)", material, re.IGNORECASE)
+            thickness = match.group(0) if match else ""
         is_free = bool(it.get("is_free", False))
-        p = 0 if is_free else it.get("price", 0)
-        suffix = " ( فري )" if is_free else (f" ( {w} )" if w > 0 else "")
-        label = f"{mat}{suffix}"
-        if label not in agg:
-            agg[label] = {
-                "material_label": label,
-                "total_qty": 0,
-                "total_area": 0,
-                "price": p,
-                "is_free": is_free,
-                "total_amount": 0
-            }
-        agg[label]["total_qty"] += it.get("qty", 0)
-        agg[label]["total_area"] += it.get("area", 0)
-    
-    summary_list = []
-    for k, v in agg.items():
-        v["total_area"] = round(v["total_area"], 3)
-        v["total_amount"] = 0 if v["is_free"] else round(v["total_area"] * v["price"], 2)
-        summary_list.append(v)
-    return summary_list
+        price = 0 if is_free else float(it.get("price", 0) or 0)
+        key = (material, thickness, is_free, price)
+        if key not in agg:
+            agg[key] = {"material_label": " ".join(x for x in (material, "(free)" if is_free else "") if x), "total_qty": 0, "total_area": 0.0, "price": price, "is_free": is_free, "total_amount": 0.0}
+        agg[key]["total_qty"] += float(it.get("qty", 0) or 0)
+        agg[key]["total_area"] += float(it.get("area", 0) or 0)
+    result = []
+    for item in agg.values():
+        item["total_area"] = round(item["total_area"], 3)
+        item["total_amount"] = 0 if item["is_free"] else round(item["total_area"] * item["price"], 2)
+        result.append(item)
+    return result
 
 def save_invoice_to_client_folder(invoice_dict):
     r"""
@@ -680,12 +675,8 @@ def update_invoice(invoice_id: int, data: InvoiceCreateModel):
 
         c.execute("INSERT OR IGNORE INTO clients (name) VALUES (?)", (data.client_name,))
 
-        c.execute("DELETE FROM client_payments WHERE invoice_id = ?", (invoice_id,))
-        if data.paid_amount and data.paid_amount > 0:
-            c.execute("""
-            INSERT INTO client_payments (client_name, invoice_id, payment_date, amount, amount_egp, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """, (data.client_name, invoice_id, data.invoice_date, data.paid_amount, data.paid_amount, f"دفعة نقدية مع الفاتورة رقم {data.invoice_no}"))
+        # Payments are ledger events, not invoice fields. Preserve the payment
+        # history when invoice details or the displayed paid amount are edited.
 
         conn.commit()
     except sqlite3.IntegrityError as e:

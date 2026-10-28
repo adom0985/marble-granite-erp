@@ -12,3 +12,6 @@ cloudflared.exe
 exports/*
 static/exports/*
 
+
+data/marble_erp.pre-overhaul-*.db
+
