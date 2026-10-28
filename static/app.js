@@ -375,14 +375,14 @@ async function saveCurrentInvoice(silent = false) {
             remaining_amount: rAmt
         });
 
-        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
+        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices_v16") || "{}");
         if (currentViewingInvoiceId) {
             localInvoices[currentViewingInvoiceId] = localRecord;
         }
         if (invNo) {
             localInvoices[invNo] = localRecord;
         }
-        localStorage.setItem("erp_local_invoices", JSON.stringify(localInvoices));
+        localStorage.setItem("erp_local_invoices_v16", JSON.stringify(localInvoices));
     } catch(errLocal) {
         console.error("Local storage error:", errLocal);
     }
@@ -789,7 +789,7 @@ async function loadInvoicesArchive() {
         const token = localStorage.getItem("erp_token") || "";
         const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
 
-        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
+        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices_v16") || "{}");
         list.forEach(inv => {
             const loc = localInvoices[inv.id] || localInvoices[inv.invoice_no];
             if (loc) {
@@ -855,7 +855,7 @@ async function viewInvoiceDetail(id) {
 
         // Check and apply local edits if present
         try {
-            const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
+            const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices_v16") || "{}");
             if (localInvoices[id] || (inv && localInvoices[inv.invoice_no])) {
                 const loc = localInvoices[id] || localInvoices[inv.invoice_no];
                 inv = Object.assign({}, inv, loc);
@@ -1014,7 +1014,7 @@ async function showClientStatement(clientName) {
         // Build chronological combined ledger (7 columns)
         const ledger = [];
         const invoices = (stmt.active_invoices && stmt.active_invoices.length > 0) ? stmt.active_invoices : (stmt.invoices || []);
-        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices") || "{}");
+        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices_v16") || "{}");
         
         let calcDebit = 0;
         invoices.forEach(inv => {
