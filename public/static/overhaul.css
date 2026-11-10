@@ -1,0 +1,24 @@
+/* Haj Salah focused workspace: preserve legacy IDs/events while improving usability. */
+:root{--hs-ink:#132238;--hs-muted:#607087;--hs-primary:#125b72;--hs-primary-strong:#0b4154;--hs-bg:#f3f7f8;--hs-line:#dce6e9;--hs-card:#fff;--hs-shadow:0 12px 32px rgba(17,47,64,.08)}
+body{background:var(--hs-bg);color:var(--hs-ink)}
+#app-wrapper{max-width:1600px;margin:auto}
+.navbar{background:linear-gradient(110deg,#0d3445,#12647a);box-shadow:0 6px 22px rgba(12,44,60,.2)}
+.brand-title span,.brand-title .brand-badge{color:#fff!important}
+.nav-tabs{gap:.4rem}.nav-tab-btn{border-radius:12px!important;transition:all .18s ease}.nav-tab-btn.active,.nav-tab-btn:hover{background:#e3f4f6!important;color:var(--hs-primary-strong)!important}
+.main-wrapper{padding:1.3rem clamp(.75rem,2vw,2rem);max-width:1540px;margin:auto}
+.card-box,.stat-card,.modal-content{border:1px solid var(--hs-line)!important;border-radius:18px!important;box-shadow:var(--hs-shadow)!important;background:var(--hs-card)}
+.card-box{padding:clamp(1rem,2vw,1.7rem);margin-bottom:1.25rem}
+.box-header{gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+.box-title{font-size:1.12rem;color:var(--hs-primary-strong)}
+.stat-card{padding:1.2rem;min-height:115px}.stat-val{font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.form-control{border:1px solid #cbd9df!important;border-radius:10px!important;min-height:42px;transition:border-color .15s,box-shadow .15s}
+.form-control:focus{border-color:#1683a0!important;box-shadow:0 0 0 3px rgba(22,131,160,.14)!important;outline:none}
+.btn{border-radius:10px!important;transition:transform .15s,box-shadow .15s}.btn:hover{transform:translateY(-1px);box-shadow:0 5px 12px #1234}
+.data-table{border-collapse:separate!important;border-spacing:0!important;width:100%;overflow:hidden;border:1px solid var(--hs-line);border-radius:12px}
+.data-table th{background:#e8f1f3!important;color:#244958!important;position:sticky;top:0;z-index:1}
+.data-table th,.data-table td{padding:.65rem .55rem!important;border-bottom:1px solid #e8eef0!important;vertical-align:middle}
+.data-table tbody tr:hover{background:#f0f8f9!important}
+#invoice-items-tbody input{min-width:62px}
+[dir="rtl"] .text-left{text-align:right!important}
+@media(max-width:900px){.navbar-content{align-items:flex-start;flex-direction:column}.nav-tabs{overflow-x:auto;width:100%;padding-bottom:.35rem}.nav-tab-btn{white-space:nowrap}.main-wrapper{padding:.8rem}.data-table{font-size:.78rem}.card-box{overflow-x:auto}}
+@media print{.navbar,.nav-tabs,.btn,.box-header button,#login-overlay{display:none!important}body{background:#fff!important}.card-box,.stat-card{box-shadow:none!important;border:1px solid #aaa!important}}

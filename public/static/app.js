@@ -351,42 +351,6 @@ async function saveCurrentInvoice(silent = false) {
     const url = isEdit ? `/api/invoices/${currentViewingInvoiceId}` : "/api/invoices";
     const method = isEdit ? "PUT" : "POST";
 
-    // Immediate Local Persistence
-    try {
-        let totQty = 0, totArea = 0, totAmt = 0;
-        items.forEach(it => {
-            totQty += (it.qty || 0);
-            totArea += (it.area || 0);
-            totAmt += (it.total || 0);
-        });
-        const dVal = parseFloat(document.getElementById("meta-discount").value) || 0;
-        const pVal = parseFloat(document.getElementById("meta-paid").value) || 0;
-        const nAmt = Math.round((totAmt - dVal) * 100) / 100;
-        const rAmt = Math.round((nAmt - pVal) * 100) / 100;
-
-        const localRecord = Object.assign({}, payload, {
-            id: currentViewingInvoiceId,
-            total_pieces: totQty,
-            total_area: Math.round(totArea * 1000) / 1000,
-            total_amount: totAmt,
-            discount: dVal,
-            net_amount: nAmt,
-            paid_amount: pVal,
-            remaining_amount: rAmt
-        });
-
-        const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices_v16") || "{}");
-        if (currentViewingInvoiceId) {
-            localInvoices[currentViewingInvoiceId] = localRecord;
-        }
-        if (invNo) {
-            localInvoices[invNo] = localRecord;
-        }
-        localStorage.setItem("erp_local_invoices_v16", JSON.stringify(localInvoices));
-    } catch(errLocal) {
-        console.error("Local storage error:", errLocal);
-    }
-
     try {
         const token = localStorage.getItem("erp_token") || "";
         const saveHeaders = {"Content-Type": "application/json"};
@@ -399,7 +363,8 @@ async function saveCurrentInvoice(silent = false) {
         });
         const data = await res.json();
         if (res.ok) {
-            currentViewingInvoiceId = data.invoice_id;
+            currentViewingInvoiceId = data.invoice_id || currentViewingInvoiceId;
+            try { localStorage.removeItem("erp_local_invoices_v16"); } catch (_) {}
             document.getElementById("btn-send-whatsapp").style.display = "inline-flex";
             document.getElementById("btn-attach-photos").style.display = "inline-flex";
             document.getElementById("btn-export-excel-current").style.display = "inline-flex";
@@ -504,6 +469,7 @@ function getCurrentInvoicePayload() {
 }
 
 async function exportCurrentInvoicePDF() {
+    if (!currentViewingInvoiceId) { alert("Save this invoice first before exporting the saved copy.."); return; }
     const payload = getCurrentInvoicePayload();
     if (payload.items.length === 0) {
         alert("يرجى إضافة بند واحد على الأقل في الفاتورة!");
@@ -514,19 +480,12 @@ async function exportCurrentInvoicePDF() {
     const origText = btn ? btn.innerHTML : "";
     if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التجهيز...';
 
-    // Auto-save in background
-    try { saveCurrentInvoice(true); } catch(e) {}
-
     try {
         const token = localStorage.getItem("erp_token") || "";
         const headers = {"Content-Type": "application/json"};
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const res = await fetch("/api/invoices/export-pdf-direct", {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify(payload)
-        });
+        const res = await fetch(`/api/invoices/${currentViewingInvoiceId}/export-pdf`, { headers: headers });
 
         if (!res.ok) {
             throw new Error(`خطأ في التصدير (${res.status})`);
@@ -543,6 +502,7 @@ async function exportCurrentInvoicePDF() {
 }
 
 async function exportCurrentInvoiceExcel() {
+    if (!currentViewingInvoiceId) { alert("Save this invoice first before exporting the saved copy.."); return; }
     const payload = getCurrentInvoicePayload();
     if (payload.items.length === 0) {
         alert("يرجى إضافة بند واحد على الأقل في الفاتورة!");
@@ -553,19 +513,12 @@ async function exportCurrentInvoiceExcel() {
     const origText = btn ? btn.innerHTML : "";
     if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التجهيز...';
 
-    // Auto-save in background
-    try { saveCurrentInvoice(true); } catch(e) {}
-
     try {
         const token = localStorage.getItem("erp_token") || "";
         const headers = {"Content-Type": "application/json"};
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const res = await fetch("/api/invoices/export-excel-direct", {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify(payload)
-        });
+        const res = await fetch(`/api/invoices/${currentViewingInvoiceId}/export-excel`, { headers: headers });
 
         if (!res.ok) {
             throw new Error(`خطأ في التصدير (${res.status})`);
@@ -853,15 +806,7 @@ async function viewInvoiceDetail(id) {
         const res = await fetch(`/api/invoices/${id}`);
         let inv = await res.json();
 
-        // Check and apply local edits if present
-        try {
-            const localInvoices = JSON.parse(localStorage.getItem("erp_local_invoices_v16") || "{}");
-            if (localInvoices[id] || (inv && localInvoices[inv.invoice_no])) {
-                const loc = localInvoices[id] || localInvoices[inv.invoice_no];
-                inv = Object.assign({}, inv, loc);
-            }
-        } catch(eLoc) {}
-
+        // The server is the source of truth; discard stale browser-only invoice overrides.
         currentViewingInvoiceId = inv.id;
 
         document.getElementById("meta-inv-no").value = inv.invoice_no;
