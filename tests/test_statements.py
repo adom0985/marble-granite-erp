@@ -30,14 +30,14 @@ class StatementVerificationTests(unittest.TestCase):
 
         # Check the 3 payments
         rows = c.execute("SELECT payment_date, amount_egp FROM client_payments WHERE client_name = 'الحاج صلاح' ORDER BY payment_date").fetchall()
-        self.assertEqual(rows[0]['payment_date'], '2026-10-10')
-        self.assertEqual(rows[0]['amount_egp'], 260000.0)
+        self.assertEqual(rows[0]['payment_date'], '2026-10-15')
+        self.assertEqual(rows[0]['amount_egp'], 156000.0)
 
-        self.assertEqual(rows[1]['payment_date'], '2026-10-15')
-        self.assertEqual(rows[1]['amount_egp'], 156000.0)
+        self.assertEqual(rows[1]['payment_date'], '2026-10-20')
+        self.assertEqual(rows[1]['amount_egp'], 132500.0)
 
-        self.assertEqual(rows[2]['payment_date'], '2026-10-20')
-        self.assertEqual(rows[2]['amount_egp'], 132500.0)
+        self.assertEqual(rows[2]['payment_date'], '2026-11-09')
+        self.assertEqual(rows[2]['amount_egp'], 260000.0)
 
     def test_sadeeq_gaafar_statement(self):
         c = self.conn.cursor()
