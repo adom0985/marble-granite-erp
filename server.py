@@ -169,9 +169,11 @@ def calculate_truck_summary(items):
             thickness = match.group(0) if match else ""
         is_free = bool(it.get("is_free", False))
         price = 0 if is_free else float(it.get("price", 0) or 0)
-        key = (material, thickness, is_free, price)
+        key = (material, thickness, is_free)
         if key not in agg:
             agg[key] = {"material_label": " ".join(x for x in (material, "(free)" if is_free else "") if x), "total_qty": 0, "total_area": 0.0, "price": price, "is_free": is_free, "total_amount": 0.0}
+        if not is_free:
+            agg[key]["price"] = price
         agg[key]["total_qty"] += float(it.get("qty", 0) or 0)
         agg[key]["total_area"] += float(it.get("area", 0) or 0)
     result = []
