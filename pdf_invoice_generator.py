@@ -14,6 +14,7 @@ def generate_invoice_pdf(invoice_dict, output_path):
     - Summary Table groups ONLY by material name / thickness (e.g. 'صني 3 سم', 'ترابيع سيلفيا').
       Never split by dimensions/lengths!
     - Automatic pagination for multi-row invoices without any content clipping.
+    - Fits up to 17 items on a single landscape page when compact.
     - Strictly NO corporate banners or signatures.
     """
     inv_no = invoice_dict.get("invoice_no", "INV-2026")
@@ -55,15 +56,17 @@ def generate_invoice_pdf(invoice_dict, output_path):
         p_str = f"{p_val:,.2f}" if p_val > 0 else "0.00"
         summary_rows_html += f"""
         <tr style="background:#ffffff;">
-            <td style="border:1.5px solid #000; padding:5px 4px; text-align:center; font-weight:900; font-size:12px;">{g['total']:,.2f}</td>
-            <td style="border:1.5px solid #000; padding:5px 4px; text-align:center; font-size:11px;">{p_str}</td>
-            <td style="border:1.5px solid #000; padding:5px 4px; text-align:center; font-weight:bold; font-size:11.5px;">{g['area']:,.3f}</td>
-            <td style="border:1.5px solid #000; padding:5px 4px; text-align:center; font-weight:bold; font-size:11.5px;">{g_q_str}</td>
-            <td style="border:1.5px solid #000; padding:5px 6px; text-align:center; font-weight:900; font-size:12px;">{mat_name}</td>
+            <td style="border:1.2px solid #000; padding:2px 4px; text-align:center; font-weight:900; font-size:10px;">{g['total']:,.2f}</td>
+            <td style="border:1.2px solid #000; padding:2px 4px; text-align:center; font-size:9.5px;">{p_str}</td>
+            <td style="border:1.2px solid #000; padding:2px 4px; text-align:center; font-weight:bold; font-size:10px;">{g['area']:,.3f}</td>
+            <td style="border:1.2px solid #000; padding:2px 4px; text-align:center; font-weight:bold; font-size:10px;">{g_q_str}</td>
+            <td style="border:1.2px solid #000; padding:2px 6px; text-align:center; font-weight:900; font-size:10px;">{mat_name}</td>
         </tr>
         """
 
     tot_q_str = f"{tot_qty:,.0f}" if float(tot_qty).is_integer() else f"{tot_qty:,.2f}"
+
+    has_driver = bool(driver_name and driver_name.strip() not in ("", "-")) or bool(car_no and car_no.strip() not in ("", "-")) or bool(loading_place and loading_place.strip() not in ("", "-"))
 
     css_head = """
     <style>
@@ -72,14 +75,18 @@ def generate_invoice_pdf(invoice_dict, output_path):
             margin: 0;
             padding: 0;
             color: #000000;
+            line-height: 1.1;
         }
         table {
             border-collapse: collapse;
             width: 100%;
         }
+        td, th {
+            line-height: 1.1;
+        }
         .meta-table td {
             border: 1.5px solid #000000;
-            padding: 4px 6px;
+            padding: 2.5px 5px;
             text-align: center;
             font-size: 11px;
         }
@@ -97,94 +104,112 @@ def generate_invoice_pdf(invoice_dict, output_path):
             background-color: #dbeafe; /* Light Blue */
             color: #000000;
             font-weight: 900;
-            border: 1.5px solid #000000;
-            padding: 5px 3px;
+            border: 1.2px solid #000000;
+            padding: 2.5px 2px;
             text-align: center;
-            font-size: 11px;
+            font-size: 10px;
         }
         .items-table td {
-            border: 1.5px solid #000000;
-            padding: 4px 3px;
+            border: 1.2px solid #000000;
+            padding: 1.8px 2px;
             text-align: center;
-            font-size: 11px;
+            font-size: 9.5px;
         }
         .pink-total-row td {
             background-color: #fbcfe8 !important; /* Pink */
-            border: 1.5px solid #000000;
-            padding: 5px 3px;
+            border: 1.2px solid #000000;
+            padding: 2.5px 2px;
             font-weight: 900;
-            font-size: 12px;
+            font-size: 11px;
             text-align: center;
             color: #000000;
         }
         .summary-table {
-            width: 100%;
+            width: 65%;
+            margin-right: auto;
             border-collapse: collapse;
         }
         .sum-hdr {
             background-color: #fef08a; /* Yellow */
             color: #000000;
             font-weight: 900;
-            font-size: 12px;
-            border: 1.5px solid #000000;
-            padding: 5px;
+            font-size: 10.5px;
+            border: 1.2px solid #000000;
+            padding: 2.5px;
             text-align: center;
         }
         .sum-sub th {
             background-color: #bbf7d0; /* Soft Green */
             color: #000000;
             font-weight: 900;
-            border: 1.5px solid #000000;
-            padding: 4px 3px;
+            border: 1.2px solid #000000;
+            padding: 2px 2px;
             text-align: center;
-            font-size: 10.5px;
+            font-size: 9.5px;
         }
         .sum-tot td {
             background-color: #86efac !important; /* Bright Green */
             font-weight: 900;
-            border: 1.5px solid #000000;
-            padding: 5px 4px;
+            border: 1.2px solid #000000;
+            padding: 2.5px 4px;
             text-align: center;
             color: #000000;
-            font-size: 11.5px;
+            font-size: 10.5px;
         }
     </style>
     """
 
-    meta_html = f"""
-    <table class="meta-table" style="margin-bottom: 6px;">
-        <tr>
-            <td class="val" style="width:17%;">{driver_name}</td>
-            <td class="lbl" style="width:8%;">السائق</td>
-            <td class="val" colspan="3" style="width:42%; font-size:13.5px; font-weight:900; color:#1e3a8a;">{client_name}</td>
-            <td class="lbl" style="width:8%;">العميل</td>
-            <td class="val" style="width:17%; font-weight:900;">{inv_date}</td>
-            <td class="lbl" style="width:8%;">التاريخ</td>
-        </tr>
-        <tr>
-            <td class="val" style="width:17%; font-weight:900; color:#b91c1c; font-size:12.5px;">{inv_no}</td>
-            <td class="lbl" style="width:8%;">رقم الفاتوره</td>
-            <td class="val" style="width:17%;">{supervisor}</td>
-            <td class="lbl" style="width:8%;">المشرف</td>
-            <td class="val" style="width:17%;">{loading_place}</td>
-            <td class="lbl" style="width:8%;">مكان التحميل</td>
-            <td class="val" style="width:17%;">{car_no}</td>
-            <td class="lbl" style="width:8%;">رقم السيارة / الكونتر</td>
-        </tr>
-    </table>
-    """
+    if has_driver:
+        meta_html = f"""
+        <table class="meta-table" style="margin-bottom: 4px;">
+            <tr>
+                <td class="val" style="width:17%;">{driver_name}</td>
+                <td class="lbl" style="width:8%;">السائق</td>
+                <td class="val" colspan="3" style="width:42%; font-size:13px; font-weight:900; color:#1e3a8a;">{client_name}</td>
+                <td class="lbl" style="width:8%;">العميل</td>
+                <td class="val" style="width:17%; font-weight:900;">{inv_date}</td>
+                <td class="lbl" style="width:8%;">التاريخ</td>
+            </tr>
+            <tr>
+                <td class="val" style="width:17%; font-weight:900; color:#b91c1c; font-size:12px;">{inv_no}</td>
+                <td class="lbl" style="width:8%;">رقم الفاتوره</td>
+                <td class="val" style="width:17%;">{supervisor}</td>
+                <td class="lbl" style="width:8%;">المشرف</td>
+                <td class="val" style="width:17%;">{loading_place}</td>
+                <td class="lbl" style="width:8%;">مكان التحميل</td>
+                <td class="val" style="width:17%;">{car_no}</td>
+                <td class="lbl" style="width:8%;">رقم السيارة / الكونتر</td>
+            </tr>
+        </table>
+        """
+    else:
+        # Clean single-row header when driver info is omitted: التاريخ | العميل | المسؤول | رقم الفاتورة
+        meta_html = f"""
+        <table class="meta-table" style="margin-bottom: 4px;">
+            <tr>
+                <td class="val" style="width:18%; font-weight:900; color:#b91c1c; font-size:12px;">{inv_no}</td>
+                <td class="lbl" style="width:10%;">رقم الفاتورة</td>
+                <td class="val" style="width:20%; font-weight:bold; font-size:12px;">{supervisor}</td>
+                <td class="lbl" style="width:10%;">المسؤول</td>
+                <td class="val" style="width:28%; font-size:13.5px; font-weight:900; color:#1e3a8a;">{client_name}</td>
+                <td class="lbl" style="width:8%;">العميل</td>
+                <td class="val" style="width:16%; font-weight:900; font-size:12px;">{inv_date}</td>
+                <td class="lbl" style="width:8%;">التاريخ</td>
+            </tr>
+        </table>
+        """
 
     table_header = """
     <thead>
         <tr>
-            <th style="width:14%;">ملاحظات</th>
+            <th style="width:8%;">ملاحظات</th>
             <th style="width:12%;">الإجمالي</th>
             <th style="width:8%;">السعر</th>
-            <th style="width:10%;">المسطح</th>
+            <th style="width:11%;">المسطح</th>
             <th style="width:7%;">عرض</th>
             <th style="width:7%;">طول</th>
             <th style="width:7%;">عدد</th>
-            <th style="width:17%;">نوع الخامه</th>
+            <th style="width:22%;">نوع الخامه</th>
             <th style="width:9%;">كود الصنف</th>
             <th style="width:9%;">رقم الطرد</th>
         </tr>
@@ -206,59 +231,52 @@ def generate_invoice_pdf(invoice_dict, output_path):
 
         return f"""
         <tr>
-            <td style="font-size:10px;">{note_str}</td>
-            <td style="font-weight:900; font-size:11.5px;">{tot:,.2f}</td>
+            <td style="font-size:8.5px;">{note_str}</td>
+            <td style="font-weight:900; font-size:10px;">{tot:,.2f}</td>
             <td>{p:,.2f}</td>
             <td style="font-weight:bold;">{ar:,.3f}</td>
             <td>{w:.2f}</td>
             <td>{l:.2f}</td>
             <td style="font-weight:900;">{q_str}</td>
-            <td style="font-weight:900; font-size:11.5px;">{mat}</td>
+            <td style="font-weight:900; font-size:10px;">{mat}</td>
             <td>{blk}</td>
             <td>{pkg}</td>
         </tr>
         """
 
     summary_card_html = f"""
-    <table style="width:100%; border:none; margin-top:10px;">
-        <tr>
-            <td style="width:35%; border:none; vertical-align:top;"></td>
-            <td style="width:65%; border:none; padding:0; vertical-align:top;">
-                <table class="summary-table">
-                    <thead>
-                        <tr>
-                            <th colspan="5" class="sum-hdr">ملخص الجرار</th>
-                        </tr>
-                        <tr class="sum-sub">
-                            <th style="width:22%;">الإجمالي</th>
-                            <th style="width:16%;">السعر</th>
-                            <th style="width:18%;">كمية الأمتار</th>
-                            <th style="width:16%;">عدد الطاولات</th>
-                            <th style="width:28%;">الخامه و البيان</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {summary_rows_html}
-                        <tr class="sum-tot">
-                            <td>{net_amount:,.2f}</td>
-                            <td>-</td>
-                            <td>{tot_area:,.3f}</td>
-                            <td>{tot_q_str}</td>
-                            <td>الإجمالي</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </td>
-        </tr>
+    <table class="summary-table" style="margin-top:4px;">
+        <thead>
+            <tr>
+                <th colspan="5" class="sum-hdr">ملخص الجرار</th>
+            </tr>
+            <tr class="sum-sub">
+                <th style="width:22%;">الإجمالي</th>
+                <th style="width:16%;">السعر</th>
+                <th style="width:18%;">كمية الأمتار</th>
+                <th style="width:16%;">عدد الطاولات</th>
+                <th style="width:28%;">الخامه و البيان</th>
+            </tr>
+        </thead>
+        <tbody>
+            {summary_rows_html}
+            <tr class="sum-tot">
+                <td>{net_amount:,.2f}</td>
+                <td>-</td>
+                <td>{tot_area:,.3f}</td>
+                <td>{tot_q_str}</td>
+                <td>الإجمالي</td>
+            </tr>
+        </tbody>
     </table>
     """
 
     doc = pymupdf.open()
-    rect = pymupdf.Rect(20, 16, 822, 579) # A4 Landscape printable rectangle
+    rect = pymupdf.Rect(16, 12, 826, 583) # A4 Landscape printable rectangle
 
     # Pagination logic in Landscape:
-    # If <= 13 items, fit entirely on 1 landscape page
-    if len(items) <= 13:
+    # If <= 17 items, fit cleanly on 1 landscape page
+    if len(items) <= 17:
         rows_str = "".join(render_row(it) for it in items)
         page_html = f"""
         <!DOCTYPE html><html><head><meta charset="utf-8">{css_head}</head><body>
@@ -269,13 +287,13 @@ def generate_invoice_pdf(invoice_dict, output_path):
                 {rows_str}
                 <tr class="pink-total-row">
                     <td></td>
-                    <td style="font-size:12.5px;">{net_amount:,.2f}</td>
+                    <td style="font-size:11px;">{net_amount:,.2f}</td>
                     <td></td>
                     <td>{tot_area:,.3f}</td>
                     <td></td>
                     <td></td>
                     <td>{tot_q_str}</td>
-                    <td colspan="3" style="font-size:13px;">الإجمالي</td>
+                    <td colspan="3" style="font-size:11px;">الإجمالي</td>
                 </tr>
             </tbody>
         </table>
@@ -316,13 +334,13 @@ def generate_invoice_pdf(invoice_dict, output_path):
                 bottom_part = f"""
                 <tr class="pink-total-row">
                     <td></td>
-                    <td style="font-size:12.5px;">{net_amount:,.2f}</td>
+                    <td style="font-size:11px;">{net_amount:,.2f}</td>
                     <td></td>
                     <td>{tot_area:,.3f}</td>
                     <td></td>
                     <td></td>
                     <td>{tot_q_str}</td>
-                    <td colspan="3" style="font-size:13px;">الإجمالي</td>
+                    <td colspan="3" style="font-size:11px;">الإجمالي</td>
                 </tr>
                 </tbody></table>
                 {summary_card_html}
