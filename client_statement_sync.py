@@ -68,6 +68,8 @@ def sync_client_statement_excel(client_name: str):
 
     if client_name == "الحاج صلاح":
         _sync_haj_salah(active_invoices, payments)
+    elif client_name == "عيسى":
+        pass
     else:
         _sync_generic_client(client_name, active_invoices, payments)
 
