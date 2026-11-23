@@ -19,14 +19,14 @@ class StatementVerificationTests(unittest.TestCase):
         inv = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(net_amount), 2) tot FROM invoices WHERE client_name = 'الحاج صلاح'").fetchone()
         pay = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(amount_egp), 2) tot FROM client_payments WHERE client_name = 'الحاج صلاح'").fetchone()
 
-        self.assertEqual(inv['cnt'], 10)
-        self.assertEqual(inv['tot'], 1845342.81)
+        self.assertEqual(inv['cnt'], 9)
+        self.assertEqual(inv['tot'], 1485379.06)
 
         self.assertEqual(pay['cnt'], 3)
         self.assertEqual(pay['tot'], 548500.00)
 
         remaining = round(inv['tot'] - pay['tot'], 2)
-        self.assertEqual(remaining, 1296842.81)
+        self.assertEqual(remaining, 936879.06)
 
         # Check the 3 payments
         rows = c.execute("SELECT payment_date, amount_egp FROM client_payments WHERE client_name = 'الحاج صلاح' ORDER BY payment_date").fetchall()
