@@ -71,5 +71,20 @@ class StatementVerificationTests(unittest.TestCase):
         remaining = round(inv['tot'] - pay['tot'], 2)
         self.assertEqual(remaining, 79950.85)
 
+    def test_haj_salah_pdf_statement_generation(self):
+        import fitz
+        from statement_pdf_generator import generate_client_statement_pdf
+
+        pdf_bytes = generate_client_statement_pdf("الحاج صلاح", conn=self.conn)
+        self.assertGreater(len(pdf_bytes), 5000)
+
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        self.assertEqual(len(doc), 1)
+        text = doc[0].get_text()
+        self.assertIn("1,853,399.56", text)
+        self.assertIn("548,500.00", text)
+        self.assertIn("1,304,899.56", text)
+        doc.close()
+
 if __name__ == "__main__":
     unittest.main()

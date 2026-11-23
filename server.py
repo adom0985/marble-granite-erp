@@ -6,7 +6,7 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Form, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 import openpyxl
 import fitz
@@ -14,6 +14,7 @@ import fitz
 from database import get_connection, init_db
 from excel_exporter import create_invoice_excel
 from pdf_invoice_generator import generate_invoice_pdf
+from statement_pdf_generator import generate_client_statement_pdf
 from auth import authenticate_user, create_auth_token, verify_auth_token, extract_token_from_request
 
 app = FastAPI(title="نظام إدارة وفواتير ومستودع ملفات الرخام والجرانيت", version="6.0")
@@ -1139,6 +1140,40 @@ def download_special_file(client_name: str):
         if os.path.exists(filepath):
             return FileResponse(filepath, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     raise HTTPException(status_code=404, detail="الملف غير موجود")
+
+@app.get("/api/clients/{client_name}/statement/pdf")
+@app.get("/clients/{client_name}/statement/pdf")
+@app.get("/api/special-files/{client_name}/download-pdf")
+def download_client_statement_pdf(client_name: str):
+    conn = get_connection()
+    try:
+        pdf_bytes = generate_client_statement_pdf(client_name, conn=conn)
+    finally:
+        conn.close()
+
+    # In local environment, also persist directly to client's folder and bundled_files
+    if not IS_VERCEL:
+        try:
+            local_dir = os.path.join(WORK_DIR, client_name)
+            if os.path.exists(local_dir):
+                with open(os.path.join(local_dir, f"كشف حساب {client_name}.pdf"), "wb") as f:
+                    f.write(pdf_bytes)
+            bundled_c_dir = os.path.join(BASE_DIR, "bundled_files", client_name)
+            if os.path.exists(bundled_c_dir):
+                with open(os.path.join(bundled_c_dir, f"كشف حساب {client_name}.pdf"), "wb") as f:
+                    f.write(pdf_bytes)
+        except Exception:
+            pass
+
+    quoted_filename = urllib.parse.quote(f"كشف حساب {client_name}.pdf")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_filename}",
+            "Cache-Control": "no-cache, no-store, must-revalidate"
+        }
+    )
 
 @app.post("/api/payments")
 @app.post("/payments")

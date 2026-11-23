@@ -205,9 +205,10 @@
                         <h4 style="margin:10px 0 4px 0; font-size:1.2rem; font-weight:900;">ملف الحاج صلاح</h4>
                         <p style="font-size:0.82rem; opacity:0.9; margin-bottom:12px;">7 فواتير نشطة معتمدة وسجل واصل والمتبقي</p>
                         <div style="display:flex; flex-direction:column; gap:6px;">
-                            <div style="display:flex; gap:6px;">
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                 <button class="btn btn-warning" style="flex:1; padding:6px; font-size:0.82rem; font-weight:800;" onclick="showClientStatement('الحاج صلاح')">👁️ فتح الحساب</button>
-                                <a href="/api/special-files/الحاج صلاح/download" class="btn btn-outline" style="background:#fff; color:#1e3a8a; padding:6px 8px; font-size:0.82rem; font-weight:800;" download>📥 إكسيل مطور</a>
+                                <a href="/api/clients/الحاج صلاح/statement/pdf" class="btn btn-danger" style="background:#dc2626; color:#fff; border:none; padding:6px 8px; font-size:0.82rem; font-weight:800; display:inline-flex; align-items:center; gap:4px; text-decoration:none;" download><i class="fa-solid fa-file-pdf"></i> 📄 PDF كشف</a>
+                                <a href="/api/special-files/الحاج صلاح/download" class="btn btn-outline" style="background:#fff; color:#1e3a8a; padding:6px 8px; font-size:0.82rem; font-weight:800;" download>📥 إكسيل</a>
                             </div>
                             <button class="btn btn-outline" style="background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.4); padding:4px; font-size:0.8rem;" onclick="startNewInvoiceForClient('الحاج صلاح')">➕ عمل فاتورة جديدة له</button>
                         </div>
@@ -553,9 +554,10 @@
                         </div>
                         <h3 style="margin:8px 0 4px 0; font-size:1.25rem;">ملف الحاج صلاح الشامل</h3>
                         <p style="font-size:0.85rem; opacity:0.9; margin-bottom:12px;">7 فواتير نشطة معتمدة وسجل الدفعات والمتبقي</p>
-                        <div style="display:flex; gap:6px;">
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
                             <button class="btn btn-warning" style="flex:1; padding:6px; font-size:0.85rem; font-weight:700;" onclick="showClientStatement('الحاج صلاح')">👁️ عرض السجل</button>
-                            <a href="/api/special-files/الحاج صلاح/download" class="btn btn-outline" style="background:#fff; color:#1e3a8a; padding:6px 10px; font-size:0.85rem; font-weight:700;">📥 إكسيل مطور</a>
+                            <a href="/api/clients/الحاج صلاح/statement/pdf" class="btn btn-danger" style="background:#dc2626; color:#fff; border:none; padding:6px 10px; font-size:0.85rem; font-weight:800; display:inline-flex; align-items:center; gap:4px; text-decoration:none;" download><i class="fa-solid fa-file-pdf"></i> 📄 PDF كشف</a>
+                            <a href="/api/special-files/الحاج صلاح/download" class="btn btn-outline" style="background:#fff; color:#1e3a8a; padding:6px 10px; font-size:0.85rem; font-weight:700;">📥 إكسيل</a>
                         </div>
                     </div>
 
@@ -714,9 +716,10 @@
     <div id="client-statement-modal" class="modal-overlay" style="display:none;">
         <div class="modal-box" style="max-width:900px;">
             <div class="modal-header">
-                <div style="display:flex; align-items:center; gap:1rem;">
+                <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
                     <h3 id="stmt-client-title" style="font-weight:800; color:#1e3a8a; margin:0;">كشف حساب العميل</h3>
-                    <a id="stmt-download-special-btn" href="#" class="btn btn-success" style="display:none; font-weight:700; padding:4px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-excel"></i> 📥 تحميل النسخة المطورة 2026 (.xlsx)</a>
+                    <a id="stmt-download-pdf-btn" href="#" class="btn btn-danger" style="display:none; font-weight:800; padding:4px 12px; font-size:0.85rem; background:#dc2626; color:#fff; border:none; text-decoration:none;" download><i class="fa-solid fa-file-pdf"></i> 📥 تحميل بيان الحساب المحدث (PDF)</a>
+                    <a id="stmt-download-special-btn" href="#" class="btn btn-success" style="display:none; font-weight:700; padding:4px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-excel"></i> 📥 إكسيل مطور (.xlsx)</a>
                 </div>
                 <button class="btn btn-outline" onclick="closeModals()">✕</button>
             </div>
