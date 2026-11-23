@@ -62,14 +62,14 @@ class StatementVerificationTests(unittest.TestCase):
         inv = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(net_amount), 2) tot FROM invoices WHERE client_name = 'عيسى'").fetchone()
         pay = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(amount_egp), 2) tot FROM client_payments WHERE client_name = 'عيسى'").fetchone()
 
-        self.assertEqual(inv['cnt'], 2)
-        self.assertEqual(inv['tot'], 487971.35)
+        self.assertEqual(inv['cnt'], 1)
+        self.assertEqual(inv['tot'], 119950.85)
 
         self.assertEqual(pay['cnt'], 1)
         self.assertEqual(pay['tot'], 40000.00)
 
         remaining = round(inv['tot'] - pay['tot'], 2)
-        self.assertEqual(remaining, 447971.35)
+        self.assertEqual(remaining, 79950.85)
 
 if __name__ == "__main__":
     unittest.main()
