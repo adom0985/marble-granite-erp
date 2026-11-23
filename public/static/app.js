@@ -948,12 +948,18 @@ async function showClientStatement(clientName) {
 
         const specialBtn = document.getElementById("stmt-download-special-btn");
         if (specialBtn) {
-            if (["الحاج صلاح", "أحمد رضا", "أدهم", "صديق جعفر"].includes(stmt.client_name)) {
+            if (["الحاج صلاح", "أحمد رضا", "أدهم", "صديق جعفر", "عيسى"].includes(stmt.client_name)) {
                 specialBtn.style.display = "inline-flex";
                 specialBtn.href = `/api/special-files/${encodeURIComponent(stmt.client_name)}/download`;
             } else {
                 specialBtn.style.display = "none";
             }
+        }
+
+        const pdfBtn = document.getElementById("stmt-download-pdf-btn");
+        if (pdfBtn) {
+            pdfBtn.style.display = "inline-flex";
+            pdfBtn.href = `/api/clients/${encodeURIComponent(stmt.client_name)}/statement/pdf`;
         }
 
         // Build chronological combined ledger (7 columns)

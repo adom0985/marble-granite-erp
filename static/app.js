@@ -956,6 +956,12 @@ async function showClientStatement(clientName) {
             }
         }
 
+        const pdfBtn = document.getElementById("stmt-download-pdf-btn");
+        if (pdfBtn) {
+            pdfBtn.style.display = "inline-flex";
+            pdfBtn.href = `/api/clients/${encodeURIComponent(stmt.client_name)}/statement/pdf`;
+        }
+
         // Build chronological combined ledger (7 columns)
         const ledger = [];
         const invoices = (stmt.active_invoices && stmt.active_invoices.length > 0) ? stmt.active_invoices : (stmt.invoices || []);
