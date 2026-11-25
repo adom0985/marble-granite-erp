@@ -30,7 +30,7 @@ def generate_client_statement_pdf(client_name: str, output_path: str = None, con
     inv_rows = c.execute("""
         SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, notes, status
         FROM invoices
-        WHERE client_name = ? AND status != 'متقفلة (أرشيف قديم)'
+        WHERE client_name = ? AND status NOT IN ('متقفلة (أرشيف قديم)', 'خارج الحساب')
         ORDER BY invoice_date ASC, id ASC
     """, (client_name,)).fetchall()
 
