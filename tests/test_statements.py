@@ -19,20 +19,25 @@ class StatementVerificationTests(unittest.TestCase):
         inv = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(net_amount), 2) tot FROM invoices WHERE client_name = 'الحاج صلاح' AND status NOT IN ('متقفلة (أرشيف قديم)', 'خارج الحساب')").fetchone()
         pay = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(amount_egp), 2) tot FROM client_payments WHERE client_name = 'الحاج صلاح'").fetchone()
 
-        self.assertEqual(inv['cnt'], 9)
-        self.assertEqual(inv['tot'], 1485379.06)
+        self.assertEqual(inv['cnt'], 10)
+        self.assertEqual(inv['tot'], 1595602.46)
 
         self.assertEqual(pay['cnt'], 3)
         self.assertEqual(pay['tot'], 548500.00)
 
         remaining = round(inv['tot'] - pay['tot'], 2)
-        self.assertEqual(remaining, 936879.06)
+        self.assertEqual(remaining, 1047102.46)
 
         # Check outside-account invoice 96 exists under Haj Salah but excluded from balance
         inv_outside = c.execute("SELECT invoice_no, net_amount, status FROM invoices WHERE id = 96").fetchone()
         self.assertEqual(inv_outside['invoice_no'], 'فاتورة 24 / 11')
         self.assertEqual(inv_outside['status'], 'خارج الحساب')
         self.assertEqual(inv_outside['net_amount'], 368020.50)
+
+        # Check new invoice 98 (فاتورة 22 / 11)
+        inv_new = c.execute("SELECT invoice_no, net_amount, status FROM invoices WHERE id = 98").fetchone()
+        self.assertEqual(inv_new['invoice_no'], 'فاتورة 22 / 11')
+        self.assertEqual(inv_new['net_amount'], 110223.40)
 
         # Check the 3 payments
         rows = c.execute("SELECT payment_date, amount_egp FROM client_payments WHERE client_name = 'الحاج صلاح' ORDER BY payment_date").fetchall()
@@ -68,14 +73,14 @@ class StatementVerificationTests(unittest.TestCase):
         inv = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(net_amount), 2) tot FROM invoices WHERE client_name = 'عيسى'").fetchone()
         pay = c.execute("SELECT COUNT(*) cnt, ROUND(SUM(amount_egp), 2) tot FROM client_payments WHERE client_name = 'عيسى'").fetchone()
 
-        self.assertEqual(inv['cnt'], 1)
-        self.assertEqual(inv['tot'], 119950.85)
+        self.assertEqual(inv['cnt'], 2)
+        self.assertEqual(inv['tot'], 221088.25)
 
         self.assertEqual(pay['cnt'], 1)
         self.assertEqual(pay['tot'], 40000.00)
 
         remaining = round(inv['tot'] - pay['tot'], 2)
-        self.assertEqual(remaining, 79950.85)
+        self.assertEqual(remaining, 181088.25)
 
     def test_haj_salah_pdf_statement_generation(self):
         import fitz
@@ -87,9 +92,24 @@ class StatementVerificationTests(unittest.TestCase):
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         self.assertEqual(len(doc), 1)
         text = doc[0].get_text()
-        self.assertIn("1,485,379.06", text)
+        self.assertIn("1,595,602.46", text)
         self.assertIn("548,500.00", text)
-        self.assertIn("936,879.06", text)
+        self.assertIn("1,047,102.46", text)
+        doc.close()
+
+    def test_eissa_pdf_statement_generation(self):
+        import fitz
+        from statement_pdf_generator import generate_client_statement_pdf
+
+        pdf_bytes = generate_client_statement_pdf("عيسى", conn=self.conn)
+        self.assertGreater(len(pdf_bytes), 5000)
+
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        self.assertEqual(len(doc), 1)
+        text = doc[0].get_text()
+        self.assertIn("221,088.25", text)
+        self.assertIn("40,000.00", text)
+        self.assertIn("181,088.25", text)
         doc.close()
 
 if __name__ == "__main__":
