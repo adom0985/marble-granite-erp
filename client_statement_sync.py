@@ -51,7 +51,7 @@ def sync_client_statement_excel(client_name: str):
     c.execute("""
     SELECT id, invoice_no, invoice_date, net_amount, notes, status 
     FROM invoices 
-    WHERE client_name = ? AND (status IS NULL OR status != 'متقفلة (أرشيف قديم)')
+    WHERE client_name = ? AND (status IS NULL OR status NOT IN ('متقفلة (أرشيف قديم)', 'خارج الحساب'))
     ORDER BY id ASC
     """, (client_name,))
     active_invoices = c.fetchall()

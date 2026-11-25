@@ -1093,9 +1093,10 @@ def get_client_statement(client_name: str):
     c.execute("SELECT id, invoice_no, invoice_date, total_pieces, total_area, net_amount, paid_amount, remaining_amount, notes, status FROM invoices WHERE client_name = ? AND status != 'متقفلة (أرشيف قديم)' ORDER BY id ASC", (client_name,))
     invoices = [dict(r) for r in c.fetchall()]
 
-    # Separate active invoices from closed/archived invoices
-    active_invoices = [inv for inv in invoices if "متقفلة" not in (inv.get("status") or "")]
+    # Separate active invoices from closed/archived invoices and outside account invoices
+    active_invoices = [inv for inv in invoices if "متقفلة" not in (inv.get("status") or "") and "خارج الحساب" not in (inv.get("status") or "")]
     archived_invoices = [inv for inv in invoices if "متقفلة" in (inv.get("status") or "")]
+    outside_account_invoices = [inv for inv in invoices if "خارج الحساب" in (inv.get("status") or "")]
 
     # Get payments for this client independently
     c.execute("SELECT id, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes FROM client_payments WHERE client_name = ? ORDER BY id ASC", (client_name,))
@@ -1117,6 +1118,7 @@ def get_client_statement(client_name: str):
         "invoices": invoices,
         "active_invoices": active_invoices,
         "archived_invoices": archived_invoices,
+        "outside_account_invoices": outside_account_invoices,
         "payments": payments
     }
 
