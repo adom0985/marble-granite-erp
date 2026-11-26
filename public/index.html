@@ -719,6 +719,7 @@
                 <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
                     <h3 id="stmt-client-title" style="font-weight:800; color:#1e3a8a; margin:0;">كشف حساب العميل</h3>
                     <a id="stmt-download-pdf-btn" href="#" class="btn btn-danger" style="display:none; font-weight:800; padding:4px 12px; font-size:0.85rem; background:#dc2626; color:#fff; border:none; text-decoration:none;" download><i class="fa-solid fa-file-pdf"></i> 📥 تحميل بيان الحساب المحدث (PDF)</a>
+                    <button type="button" class="btn btn-success" style="font-weight:800; padding:4px 12px; font-size:0.85rem;" onclick="openAddPaymentModal(currentStatementClient)"><i class="fa-solid fa-plus"></i> تسجيل دفعة / واصل</button>
                     <a id="stmt-download-special-btn" href="#" class="btn btn-success" style="display:none; font-weight:700; padding:4px 12px; font-size:0.85rem;"><i class="fa-solid fa-file-excel"></i> 📥 إكسيل مطور (.xlsx)</a>
                 </div>
                 <button class="btn btn-outline" onclick="closeModals()">✕</button>
@@ -765,7 +766,7 @@
     <div id="payment-modal" class="modal-overlay" style="display:none;">
         <div class="modal-box">
             <div class="modal-header">
-                <h3 style="font-weight:800;"><i class="fa-solid fa-hand-holding-dollar"></i> تسجيل دفعة جديدة من عميل</h3>
+                <h3 style="font-weight:800;"><i class="fa-solid fa-hand-holding-dollar"></i> تسجيل دفعة جديدة أو قديمة من عميل</h3>
                 <button class="btn btn-outline" onclick="closeModals()">✕</button>
             </div>
             <div class="form-group">
@@ -773,7 +774,7 @@
                 <input type="text" id="pay-client-name" list="clients-datalist" class="form-control">
             </div>
             <div class="form-group">
-                <label>تاريخ السداد:</label>
+                <label>تاريخ السداد (يمكنك اختيار أي تاريخ قديم أو جديد):</label>
                 <input type="date" id="pay-date" class="form-control">
             </div>
             <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:0.75rem;">
@@ -809,13 +810,13 @@
             </div>
             <div style="text-align:left; margin-top:1.25rem;">
                 <button class="btn btn-outline" onclick="closeModals()">إلغاء</button>
-                <button class="btn btn-success" onclick="submitPayment()">حفظ الدفعة</button>
+                <button id="submit-payment-btn" class="btn btn-success" onclick="submitPayment()">حفظ الدفعة وتحديث الحسابات</button>
             </div>
         </div>
     </div>
 
     <!-- Partner Expense Modal -->
     </div> <!-- End app-wrapper -->
-    <script src="/static/app.js?v=overhaul-3"></script>
+    <script src="/static/app.js?v=overhaul-4"></script>
 </body>
 </html>

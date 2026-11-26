@@ -929,8 +929,11 @@ async function loadClientsList() {
     });
 }
 
+let currentStatementClient = "";
+
 async function showClientStatement(clientName) {
     if (!clientName) return;
+    currentStatementClient = clientName;
     try {
         const res = await fetch(`/api/clients/${encodeURIComponent(clientName)}/statement`);
         const stmt = await res.json();
@@ -1037,7 +1040,7 @@ async function showClientStatement(clientName) {
                         <td>${item.date}</td>
                         <td><span class="badge badge-green" style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:4px; font-weight:700;">دفعة مسددة</span></td>
                         <td><b>${item.doc_no}</b></td>
-                        <td>${item.details}</td>
+                        <td>${item.details} <button type="button" title="حذف هذه الدفعة" style="border:none; background:transparent; cursor:pointer; color:#dc2626; font-size:0.85rem; margin-right:4px;" onclick="deletePayment(${item.id}, '${stmt.client_name.replace(/'/g, "\\'")}')">🗑️</button></td>
                         <td style="color:#64748b;">-</td>
                         <td style="color:#15803d; font-weight:800;">${item.credit.toLocaleString()} ج.م</td>
                         <td style="font-weight:900; color:#1e3a8a;">${runningBalance.toLocaleString()} ج.م</td>
@@ -1511,6 +1514,121 @@ async function loadMaterials() {
 }
 
 // ----------------- MODALS -----------------
+
+
+// ----------------- CLIENT PAYMENTS (NEW & BACKDATED) -----------------
+
+function openAddPaymentModal(clientName = "") {
+    const modal = document.getElementById("payment-modal");
+    if (!modal) return;
+
+    const clientInput = document.getElementById("pay-client-name");
+    const dateInput = document.getElementById("pay-date");
+    const amountInput = document.getElementById("pay-amount");
+    const currencySelect = document.getElementById("pay-currency");
+    const rateInput = document.getElementById("pay-rate");
+    const methodSelect = document.getElementById("pay-method");
+    const notesInput = document.getElementById("pay-notes");
+
+    if (clientInput) clientInput.value = clientName || "";
+    if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
+    if (amountInput) amountInput.value = "";
+    if (currencySelect) currencySelect.value = "EGP";
+    if (rateInput) rateInput.value = "1";
+    if (methodSelect) methodSelect.value = "نقداً";
+    if (notesInput) notesInput.value = "واصل منه";
+
+    modal.style.display = "flex";
+    setTimeout(() => {
+        if (clientName && amountInput) amountInput.focus();
+        else if (clientInput) clientInput.focus();
+    }, 50);
+}
+
+async function submitPayment() {
+    const clientName = (document.getElementById("pay-client-name")?.value || "").trim();
+    const paymentDate = (document.getElementById("pay-date")?.value || "").trim();
+    const amount = parseFloat(document.getElementById("pay-amount")?.value);
+    const currency = document.getElementById("pay-currency")?.value || "EGP";
+    const exchangeRate = parseFloat(document.getElementById("pay-rate")?.value) || 1;
+    const paymentMethod = document.getElementById("pay-method")?.value || "نقداً";
+    const notes = (document.getElementById("pay-notes")?.value || "").trim() || "واصل منه";
+
+    if (!clientName) {
+        alert("يرجى كتابة أو اختيار اسم العميل");
+        return;
+    }
+    if (!paymentDate) {
+        alert("يرجى تحديد تاريخ السداد");
+        return;
+    }
+    if (!amount || amount <= 0) {
+        alert("يرجى إدخال مبلغ صحيح أكبر من صفر");
+        return;
+    }
+
+    const btn = document.getElementById("submit-payment-btn");
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = "جاري الحفظ والتحديث...";
+    }
+
+    try {
+        const res = await fetch("/api/payments", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                client_name: clientName,
+                payment_date: paymentDate,
+                amount: amount,
+                currency: currency,
+                exchange_rate: exchangeRate,
+                payment_method: paymentMethod,
+                notes: notes
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.detail || "فشل حفظ الدفعة");
+        }
+
+        const paymentModal = document.getElementById("payment-modal");
+        if (paymentModal) paymentModal.style.display = "none";
+
+        await Promise.all([
+            typeof loadClientsList === "function" ? loadClientsList() : Promise.resolve(),
+            typeof loadDashboardStats === "function" ? loadDashboardStats() : Promise.resolve()
+        ]);
+
+        await showClientStatement(clientName);
+        alert(`تم تسجيل الدفعة (${Number(data.amount_egp || amount).toLocaleString()} ج.م) بتاريخ ${paymentDate} وتحديث كشف الحساب والملفات بنجاح.`);
+    } catch (e) {
+        alert("خطأ أثناء حفظ الدفعة: " + e.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "حفظ الدفعة وتحديث الحسابات";
+        }
+    }
+}
+
+async function deletePayment(paymentId, clientName) {
+    if (!paymentId) return;
+    if (!confirm("هل أنت متأكد من حذف هذه الدفعة؟ سيتم تحديث كشف الحساب تلقائياً.")) return;
+    try {
+        const res = await fetch(`/api/payments/${paymentId}`, { method: "DELETE" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "فشل حذف الدفعة");
+
+        await Promise.all([
+            typeof loadClientsList === "function" ? loadClientsList() : Promise.resolve(),
+            typeof loadDashboardStats === "function" ? loadDashboardStats() : Promise.resolve()
+        ]);
+        if (clientName) await showClientStatement(clientName);
+    } catch (e) {
+        alert("خطأ أثناء حذف الدفعة: " + e.message);
+    }
+}
 
 function closeModals() {
     document.querySelectorAll(".modal-overlay").forEach(m => m.style.display = "none");
