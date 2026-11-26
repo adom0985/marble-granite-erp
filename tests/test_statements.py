@@ -22,11 +22,11 @@ class StatementVerificationTests(unittest.TestCase):
         self.assertEqual(inv['cnt'], 10)
         self.assertEqual(inv['tot'], 1595602.46)
 
-        self.assertEqual(pay['cnt'], 3)
-        self.assertEqual(pay['tot'], 548500.00)
+        self.assertEqual(pay['cnt'], 4)
+        self.assertEqual(pay['tot'], 553700.00)
 
         remaining = round(inv['tot'] - pay['tot'], 2)
-        self.assertEqual(remaining, 1047102.46)
+        self.assertEqual(remaining, 1041902.46)
 
         # Check outside-account invoice 96 exists under Haj Salah but excluded from balance
         inv_outside = c.execute("SELECT invoice_no, net_amount, status FROM invoices WHERE id = 96").fetchone()
@@ -39,16 +39,19 @@ class StatementVerificationTests(unittest.TestCase):
         self.assertEqual(inv_new['invoice_no'], 'فاتورة 22 / 11')
         self.assertEqual(inv_new['net_amount'], 110223.40)
 
-        # Check the 3 payments
-        rows = c.execute("SELECT payment_date, amount_egp FROM client_payments WHERE client_name = 'الحاج صلاح' ORDER BY payment_date").fetchall()
+        # Check the 4 payments in chronological order
+        rows = c.execute("SELECT payment_date, amount_egp FROM client_payments WHERE client_name = 'الحاج صلاح' ORDER BY payment_date ASC, id ASC").fetchall()
         self.assertEqual(rows[0]['payment_date'], '2026-10-15')
         self.assertEqual(rows[0]['amount_egp'], 156000.0)
 
-        self.assertEqual(rows[1]['payment_date'], '2026-10-20')
-        self.assertEqual(rows[1]['amount_egp'], 132500.0)
+        self.assertEqual(rows[1]['payment_date'], '2026-10-17')
+        self.assertEqual(rows[1]['amount_egp'], 5200.0)
 
-        self.assertEqual(rows[2]['payment_date'], '2026-11-09')
-        self.assertEqual(rows[2]['amount_egp'], 260000.0)
+        self.assertEqual(rows[2]['payment_date'], '2026-10-20')
+        self.assertEqual(rows[2]['amount_egp'], 132500.0)
+
+        self.assertEqual(rows[3]['payment_date'], '2026-11-09')
+        self.assertEqual(rows[3]['amount_egp'], 260000.0)
 
     def test_sadeeq_gaafar_statement(self):
         c = self.conn.cursor()
@@ -93,8 +96,8 @@ class StatementVerificationTests(unittest.TestCase):
         self.assertEqual(len(doc), 1)
         text = doc[0].get_text()
         self.assertIn("1,595,602.46", text)
-        self.assertIn("548,500.00", text)
-        self.assertIn("1,047,102.46", text)
+        self.assertIn("553,700.00", text)
+        self.assertIn("1,041,902.46", text)
         doc.close()
 
     def test_eissa_pdf_statement_generation(self):

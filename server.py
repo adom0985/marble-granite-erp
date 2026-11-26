@@ -1053,10 +1053,10 @@ def get_clients():
     SELECT 
         c.*,
         COUNT(i.id) as invoices_count,
-        COALESCE(SUM(i.total_amount), 0) as total_invoiced,
+        COALESCE(SUM(i.net_amount), 0) as total_invoiced,
         COALESCE(SUM(i.total_pieces), 0) as total_pieces_count
     FROM clients c
-    LEFT JOIN invoices i ON c.name = i.client_name
+    LEFT JOIN invoices i ON c.name = i.client_name AND (i.status IS NULL OR i.status NOT IN ('متقفلة (أرشيف قديم)', 'خارج الحساب'))
     GROUP BY c.id
     ORDER BY c.name ASC
     """)
@@ -1099,7 +1099,7 @@ def get_client_statement(client_name: str):
     outside_account_invoices = [inv for inv in invoices if "خارج الحساب" in (inv.get("status") or "")]
 
     # Get payments for this client independently
-    c.execute("SELECT id, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes FROM client_payments WHERE client_name = ? ORDER BY id ASC", (client_name,))
+    c.execute("SELECT id, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes FROM client_payments WHERE client_name = ? ORDER BY payment_date ASC, id ASC", (client_name,))
     payments = [dict(r) for r in c.fetchall()]
 
     conn.close()
@@ -1177,6 +1177,27 @@ def download_client_statement_pdf(client_name: str):
         }
     )
 
+def _sync_client_files_after_payment(client_name: str):
+    if not client_name:
+        return
+    try:
+        from client_statement_sync import sync_client_statement_excel
+        sync_client_statement_excel(client_name)
+    except Exception as e:
+        print(f"Error syncing client excel statement on payment: {e}")
+
+    if not IS_VERCEL:
+        try:
+            pdf_bytes = generate_client_statement_pdf(client_name)
+            pdf_name = "حساب عيسى.pdf" if client_name == "عيسى" else f"كشف حساب {client_name}.pdf"
+            for out_dir in [os.path.join(WORK_DIR, client_name), os.path.join(BASE_DIR, "bundled_files", client_name)]:
+                if os.path.exists(out_dir) or client_name in ["الحاج صلاح", "عيسى", "أحمد رضا", "صديق جعفر", "أدهم"]:
+                    os.makedirs(out_dir, exist_ok=True)
+                    with open(os.path.join(out_dir, pdf_name), "wb") as f:
+                        f.write(pdf_bytes)
+        except Exception as e:
+            print(f"Error syncing client PDF statement on payment: {e}")
+
 @app.post("/api/payments")
 @app.post("/payments")
 def add_payment(p: PaymentCreateModel):
@@ -1187,17 +1208,31 @@ def add_payment(p: PaymentCreateModel):
     INSERT INTO client_payments (client_name, invoice_id, payment_date, amount, currency, exchange_rate, amount_egp, payment_method, notes)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (p.client_name, p.invoice_id, p.payment_date, p.amount, p.currency, p.exchange_rate, amount_egp, p.payment_method, p.notes))
+    payment_id = c.lastrowid
     conn.commit()
     conn.close()
 
-    # AUTO-SYNC CLIENT MASTER STATEMENT EXCEL ON DISK AND BUNDLED FILES
-    try:
-        from client_statement_sync import sync_client_statement_excel
-        sync_client_statement_excel(p.client_name)
-    except Exception as e:
-        print(f"Error syncing client excel statement on payment: {e}")
+    # AUTO-SYNC CLIENT MASTER STATEMENT EXCEL & PDF ON DISK AND BUNDLED FILES
+    _sync_client_files_after_payment(p.client_name)
 
-    return {"status": "success", "amount_egp": amount_egp}
+    return {"status": "success", "id": payment_id, "amount_egp": amount_egp}
+
+@app.delete("/api/payments/{payment_id}")
+@app.delete("/payments/{payment_id}")
+def delete_payment(payment_id: int):
+    conn = get_connection()
+    c = conn.cursor()
+    row = c.execute("SELECT client_name FROM client_payments WHERE id = ?", (payment_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="الدفعة غير موجودة")
+    client_name = row["client_name"]
+    c.execute("DELETE FROM client_payments WHERE id = ?", (payment_id,))
+    conn.commit()
+    conn.close()
+
+    _sync_client_files_after_payment(client_name)
+    return {"status": "success", "message": "تم حذف الدفعة بنجاح"}
 
 # ----------------- MATERIALS & PRICE MANAGEMENT -----------------
 

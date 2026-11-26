@@ -61,7 +61,7 @@ def sync_client_statement_excel(client_name: str):
     SELECT id, payment_date, amount_egp, payment_method, notes 
     FROM client_payments 
     WHERE client_name = ?
-    ORDER BY id ASC
+    ORDER BY payment_date ASC, id ASC
     """, (client_name,))
     payments = c.fetchall()
     conn.close()
